@@ -1,0 +1,52 @@
+substitutions:
+    _GCR_RADIX: eu.gcr.io # default value
+
+steps:
+  # Building plex-api container...
+  - name: gcr.io/cloud-builders/docker
+    id: build-container
+    args:
+      - 'build'
+      - '-t'
+      - '$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$BRANCH_NAME'
+      - '-t'
+      - '$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$SHORT_SHA'
+      - '-f'
+      - 'builder/Dockerfile'
+      - '.'
+
+ # Adding addtional tags...
+  - name: gcr.io/cloud-builders/docker
+    id: tag-container
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - if [ "$BRANCH_NAME" == "master" ]; then docker tag $_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$SHORT_SHA $_GCR_RADIX/$PROJECT_ID/$REPO_NAME:latest; fi
+
+
+  # Pushing container to GCR...
+  - name: gcr.io/cloud-builders/docker
+    id: push-container
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - docker images $_GCR_RADIX/$PROJECT_ID/$REPO_NAME | awk 'NR > 1 {print $2}' | xargs -I@ -n 1 /bin/bash -c "docker push $_GCR_RADIX/$PROJECT_ID/$REPO_NAME:@"
+
+  # Deploy container on Cloud Run...
+  - name: gcr.io/cloud-builders/gcloud
+    id: deploy-container
+    args:
+      - 'alpha'
+      - 'run'
+      - 'deploy'
+      - '$REPO_NAME-$BRANCH_NAME'
+      - '--platform=managed'
+      - '--image=$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$SHORT_SHA'
+      - '--memory=256Mi'
+      - '--port=8080'
+      - '--concurrency=100'
+      - '--region=europe-west1'
+      - '--no-allow-unauthenticated'
+
+tags:   ['$BRANCH_NAME']
+images: ['$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$BRANCH_NAME']

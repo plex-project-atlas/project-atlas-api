@@ -1,0 +1,6 @@
+uvicorn==0.11.2
+fastapi==0.47.1
+starlette==0.12.9
+plexapi==3.3.0
+tmdbsimple==2.2.0
+tvdb-api-client==0.3.0
