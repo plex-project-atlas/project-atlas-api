@@ -4,7 +4,7 @@ import uvicorn
 
 from fastapi          import FastAPI, Depends, HTTPException
 from routers          import match
-from starlette.status import *
+from starlette.status import HTTP_415_UNSUPPORTED_MEDIA_TYPE
 
 app = FastAPI()
 

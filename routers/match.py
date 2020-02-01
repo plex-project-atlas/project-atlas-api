@@ -1,6 +1,9 @@
 from fastapi          import APIRouter, HTTPException
 from plexapi.myplex   import MyPlexAccount
-from starlette.status import *
+from starlette.status import HTTP_200_OK, \
+                             HTTP_501_NOT_IMPLEMENTED, \
+                             HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
+     
 
 from tvdb_api_client import TVDBClient
 
