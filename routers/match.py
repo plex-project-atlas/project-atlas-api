@@ -1,16 +1,14 @@
-from fastapi          import APIRouter, HTTPException
-from plexapi.myplex   import MyPlexAccount
-from starlette.status import HTTP_200_OK, \
-                             HTTP_501_NOT_IMPLEMENTED, \
-                             HTTP_503_SERVICE_UNAVAILABLE, \
-                             HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
-
-
-from tvdb_api_client import TVDBClient
-from routers.libs import tmdb
-
 import os
 import logging
+
+from   fastapi          import APIRouter, HTTPException
+from   plexapi.myplex   import MyPlexAccount
+from   tvdb_api_client  import TVDBClient
+from   routers.libs     import tmdb
+from   starlette.status import HTTP_200_OK, \
+                               HTTP_501_NOT_IMPLEMENTED, \
+                               HTTP_503_SERVICE_UNAVAILABLE, \
+                               HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 
 router = APIRouter()
 tmdb   = tmdb.tmdb()
@@ -77,7 +75,7 @@ async def match_tmdb(title: str, media_type: str):
                    tmdb.search_show_by_name(title)
 
     if not tmdb_results:
-        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'TMDB API Service Unavailable')
+        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
     return tmdb_results
 

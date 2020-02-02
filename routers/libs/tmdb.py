@@ -1,7 +1,7 @@
-from starlette.status import HTTP_200_OK
-
 import os
 import requests
+
+from   starlette.status import HTTP_200_OK
 
 class tmdb:
     api_url = 'https://api.themoviedb.org/3'
@@ -15,7 +15,6 @@ class tmdb:
             'query':    title,
             'api_key':  self.api_key
         }
-
         res = requests.get(url = tmdb.api_url + '/search/tv', params = params)
 
         if res.status_code != HTTP_200_OK:
@@ -36,7 +35,6 @@ class tmdb:
             'language': lang,
             'query':    title
         }
-
         res = requests.get(url = tmdb.api_url + '/search/movie', params = params)
 
         if res.status_code != HTTP_200_OK:
@@ -57,7 +55,6 @@ class tmdb:
             'language': lang,
             'query':    title
         }
-
         res = requests.get(url = tmdb.api_url + '/search/multi', params = params)
 
         if res.status_code != HTTP_200_OK:
@@ -67,7 +64,7 @@ class tmdb:
 
         results = [{
             'guid':  item['id'],
-            'media_type': 'show' if item['media_type'] == 'tv' else 'movie',
+            'type':  'show' if item['media_type'] == 'tv' else 'movie',
             'title': item['title'],
             'year':  item['release_date'] if hasattr(item, 'release_date') else item['first_air_date']
         } for item in json['results']]
@@ -79,4 +76,3 @@ class tmdb:
                 results.append(item)
 
         return results
-
