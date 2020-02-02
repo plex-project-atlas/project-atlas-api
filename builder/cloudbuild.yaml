@@ -43,7 +43,7 @@ steps:
       - '--platform=managed'
       - '--region=europe-west1'
       - '--image=$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$SHORT_SHA'
-      - '--revision-suffix $SHORT_SHA'
+      - '--revision-suffix=$SHORT_SHA'
       - '--memory=256Mi'
       - '--port=8080'
       - '--concurrency=100'

@@ -7,7 +7,7 @@ class tmdb:
     api_url = 'https://api.themoviedb.org/3'
 
     def __init__(self):
-        self.api_key = os.environ['TMDB_API_KEY']
+        self.api_key = os.environ.get('TMDB_API_KEY')
 
     def search_show_by_name(self, title: str, lang: str = 'it-IT'):
         params = {
