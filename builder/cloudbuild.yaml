@@ -41,12 +41,12 @@ steps:
       - 'deploy'
       - '$REPO_NAME-$BRANCH_NAME'
       - '--platform=managed'
+      - '--region=europe-west1'
       - '--image=$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$SHORT_SHA'
+      - '--revision-suffix $SHORT_SHA'
       - '--memory=256Mi'
       - '--port=8080'
       - '--concurrency=100'
-      - '--region=europe-west1'
-      - '--no-allow-unauthenticated'
 
 tags:   ['$BRANCH_NAME']
 images: ['$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$BRANCH_NAME']
