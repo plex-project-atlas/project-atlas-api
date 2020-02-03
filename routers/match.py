@@ -3,15 +3,16 @@ import logging
 
 from   fastapi          import APIRouter, HTTPException
 from   plexapi.myplex   import MyPlexAccount
-from   tvdb_api_client  import TVDBClient
-from   routers.libs     import tmdb
+from   libs.tmdb        import TMDBClient
+from   libs.tvdb        import TVDBClient
 from   starlette.status import HTTP_200_OK, \
                                HTTP_501_NOT_IMPLEMENTED, \
                                HTTP_503_SERVICE_UNAVAILABLE, \
                                HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 
 router = APIRouter()
-tmdb   = tmdb.tmdb()
+tmdb   = TMDBClient()
+tvdb   = TVDBClient()
 
 
 def env_credentials_check(required_env_vars: list):
@@ -89,11 +90,8 @@ async def match_tvdb(title: str, media_type: str):
     ]
     env_credentials_check(required_env_vars)
 
-    tvdb         = TVDBClient(os.environ['TVDB_USR_NAME'], os.environ['TVDB_USR_KEY'], os.environ['TVDB_API_KEY'])
-    tvdb_results = tvdb.find_series_by_name(title)
+    tvdb_results = tvdb.search_show_by_name(title)
+    if not tvdb_results:
+        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
-    return [{
-        'guid':  elem['tvdb_id'],
-        'title': elem['name'],
-        'year':  elem['air_date'].split('-')[0] if elem['air_date'] else None
-    } for elem in tvdb_results ]
+    return tvdb_results

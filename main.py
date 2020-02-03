@@ -10,7 +10,7 @@ app = FastAPI()
 
 
 async def verify_media_type(media_type: str):
-    if media_type not in {'movie', 'show'}:
+    if media_type not in ['movie', 'show']:
         raise HTTPException(status_code = HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail = "Unsupported Media Type")
 
 
