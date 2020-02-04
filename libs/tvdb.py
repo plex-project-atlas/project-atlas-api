@@ -57,11 +57,10 @@ class TVDBClient:
                 'year': elem['firstAired'].split('-')[0] if elem['firstAired'] else None
             } for elem in resp_obj['data']]
 
+        httpx_client = httpx.AsyncClient()
         if isinstance(title, str):
-            with httpx.AsyncClient() as httpx_client:
-                return await search_worker(httpx_client, title, self.api_headers)
-        elif isinstance(title, List):
-            with httpx.AsyncClient() as httpx_client:
-                requests = (search_worker(httpx_client, elem, self.api_headers) for elem in title)
-            return await asyncio.gather(*requests)
-        return None
+            return await search_worker(httpx_client, title, self.api_headers)
+        else:
+            requests  = (search_worker(httpx_client, elem, self.api_headers) for elem in title)
+            responses = await asyncio.gather(*requests)
+            return dict( zip(title, responses) )
