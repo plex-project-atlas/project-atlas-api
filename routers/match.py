@@ -90,6 +90,7 @@ async def match_tvdb(title: str, media_type: str):
     ]
     env_credentials_check(required_env_vars)
 
+    return await tvdb.search_show_by_name('limitless')
     tvdb_results = tvdb.search_show_by_name(title)
     if not tvdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')

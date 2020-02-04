@@ -1,6 +1,8 @@
 import os
-import requests
+import httpx
+import asyncio
 
+from   typing           import Union, List
 from   starlette.status import HTTP_200_OK
 
 
@@ -29,7 +31,7 @@ class TVDBClient:
             'userkey':  self.usr_key,
             'apikey':   self.api_key
         }
-        response = requests.post(url = TVDBClient.api_url + '/login', headers = headers, json = payload)
+        response = httpx.post(url = TVDBClient.api_url + '/login', headers = headers, json = payload)
 
         if response.status_code != HTTP_200_OK:
             return None
@@ -37,18 +39,29 @@ class TVDBClient:
         resp_obj = response.json()
         return resp_obj['token']
 
-    def search_show_by_name(self, title: str):
-        params = {
-            'name': title
-        }
-        response = requests.get(url = TVDBClient.api_url + '/search/series', headers = self.api_headers, params = params)
+    async def search_show_by_name(self, title: Union[ str, List[str] ]):
+        async def search_worker(client: httpx.AsyncClient, query: str, headers: dict):
+            api_endpoint = '/search/series'
+            params = {
+                'name': query
+            }
+            response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers, params = params)
 
-        if response.status_code != HTTP_200_OK:
-            return None
+            if response.status_code != HTTP_200_OK:
+                return None
 
-        resp_obj = response.json()
-        return [{
-            'guid':  elem['id'],
-            'title': elem['seriesName'],
-            'year':  elem['firstAired'].split('-')[0] if elem['firstAired'] else None
-        } for elem in resp_obj['data']]
+            resp_obj = response.json()
+            return [{
+                'guid': elem['id'],
+                'title': elem['seriesName'],
+                'year': elem['firstAired'].split('-')[0] if elem['firstAired'] else None
+            } for elem in resp_obj['data']]
+
+        if isinstance(title, str):
+            with httpx.AsyncClient() as httpx_client:
+                return await search_worker(httpx_client, title, self.api_headers)
+        elif isinstance(title, List):
+            with httpx.AsyncClient() as httpx_client:
+                requests = (search_worker(httpx_client, elem, self.api_headers) for elem in title)
+            return await asyncio.gather(*requests)
+        return None

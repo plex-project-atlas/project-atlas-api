@@ -1,5 +1,5 @@
 import os
-import requests
+import httpx
 
 from   starlette.status import HTTP_200_OK
 
@@ -16,7 +16,7 @@ class TMDBClient:
             'query':    title,
             'api_key':  self.api_key
         }
-        res = requests.get(url = TMDBClient.api_url + '/search/tv', params = params)
+        res = httpx.get(url = TMDBClient.api_url + '/search/tv', params = params)
 
         if res.status_code != HTTP_200_OK:
             return None
@@ -35,7 +35,7 @@ class TMDBClient:
             'language': lang,
             'query':    title
         }
-        res = requests.get(url = TMDBClient.api_url + '/search/movie', params = params)
+        res = httpx.get(url = TMDBClient.api_url + '/search/movie', params = params)
 
         if res.status_code != HTTP_200_OK:
             return None
@@ -54,7 +54,7 @@ class TMDBClient:
             'language': lang,
             'query':    title
         }
-        res = requests.get(url = TMDBClient.api_url + '/search/multi', params = params)
+        res = httpx.get(url = TMDBClient.api_url + '/search/multi', params = params)
 
         if res.status_code != HTTP_200_OK:
             return None
