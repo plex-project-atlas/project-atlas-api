@@ -25,7 +25,7 @@ class TMDBClient:
 
         return [{
             'guid':  item['id'],
-            'title': item['title'],
+            'title': item['name'],
             'year':  item['first_air_date'].split('-')[0] if item['first_air_date'] else None
         } for item in json['results']]
 
