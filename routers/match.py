@@ -3,7 +3,6 @@ import logging
 
 from   fastapi          import APIRouter, HTTPException
 from   plexapi.myplex   import MyPlexAccount
-from   typing           import Union, List
 from   libs.tmdb        import TMDBClient
 from   libs.tvdb        import TVDBClient
 from   libs.imdb        import IMDBClient
@@ -96,8 +95,8 @@ async def match_tvdb(title: str):
 
 
 @router.get("/imdb", status_code = HTTP_200_OK)
-async def match_tvdb(title: str):
-    imdb_results = await imdb.search_show_by_name(['alien', 'limitless'])
+async def match_imdb(title: str):
+    imdb_results = await imdb.search_show_by_name(title)
     if not imdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
