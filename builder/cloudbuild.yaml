@@ -48,5 +48,18 @@ steps:
       - '--port=8080'
       - '--concurrency=100'
 
+  # Route traffic to the new deployed version on Cloud Run...
+  - name: gcr.io/cloud-builders/gcloud
+    id: route-traffic
+    args:
+      - 'alpha'
+      - 'run'
+      - 'services'
+      - 'update-traffic'
+      - '$REPO_NAME-$BRANCH_NAME'
+      - '--platform=managed'
+      - '--region=europe-west1'
+      - '--to-revisions=$REPO_NAME-$BRANCH_NAME-$SHORT_SHA=100'
+
 tags:   ['$BRANCH_NAME']
 images: ['$_GCR_RADIX/$PROJECT_ID/$REPO_NAME:$BRANCH_NAME']
