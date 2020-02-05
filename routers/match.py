@@ -2,7 +2,7 @@ import os
 import logging
 
 from   fastapi          import APIRouter, HTTPException
-from   plexapi.myplex   import MyPlexAccount
+from   plexapi.myplex   import MyPlexAccount, PlexServer
 from   libs.tmdb        import TMDBClient
 from   libs.tvdb        import TVDBClient
 from   libs.imdb        import IMDBClient
@@ -16,7 +16,8 @@ router = APIRouter()
 tmdb   = TMDBClient()
 tvdb   = TVDBClient()
 imdb   = IMDBClient()
-plex   = MyPlexAccount().resource('Project: Atlas').connect()
+plex   = MyPlexAccount().resource('Project: Atlas')
+plex   = PlexServer(token = plex.accessToken)
 
 
 def env_credentials_check(required_env_vars: list):

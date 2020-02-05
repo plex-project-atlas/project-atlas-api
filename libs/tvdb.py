@@ -2,7 +2,7 @@ import os
 import httpx
 import asyncio
 
-from   typing           import Union, List
+from   typing           import Optional, Union, List
 from   starlette.status import HTTP_200_OK
 
 
@@ -14,10 +14,11 @@ class TVDBClient:
         self.usr_name    = os.environ.get('TVDB_USR_NAME')
         self.usr_key     = os.environ.get('TVDB_USR_KEY')
         self.api_key     = os.environ.get('TVDB_API_KEY')
+        self.api_token   = self.__get_jwt_token()
         self.api_headers = {
             'Accept':          'application/vnd.thetvdb.v3.0.0',
             'Content-Type':    'application/json',
-            'Authorization':   'Bearer ' + self.get_jwt_token(),
+            'Authorization':   'Bearer ' + self.api_token if self.api_token else '',
             'Accept-Language': lang
         }
 
@@ -34,7 +35,7 @@ class TVDBClient:
             'year':    elem['firstAired'].split('-')[0] if elem['firstAired'] else None
         } for elem in resp_obj]
 
-    def get_jwt_token(self):
+    def __get_jwt_token(self) -> Optional[str]:
         api_endpoint = '/login'
         headers = {
             'Accept':       'application/json',
