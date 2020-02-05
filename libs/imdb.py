@@ -30,15 +30,16 @@ class IMDBClient:
             return None
 
         results = []
-        for elem in resp_obj['d']:
-            if 'q' not in elem:
-                continue
-            results.append({
-                'title': elem['l'],
-                'guid':  elem['id'],
-                'type':  'show' if elem['q'] == 'TV series' else 'movie',
-                'year':  elem['y'] if 'y' in elem else None
-            })
+        if 'd' in resp_obj:
+            for elem in resp_obj['d']:
+                if 'q' not in elem:
+                    continue
+                results.append({
+                    'title': elem['l'],
+                    'guid':  elem['id'],
+                    'type':  'show' if elem['q'] == 'TV series' else 'movie',
+                    'year':  elem['y'] if 'y' in elem else None
+                })
 
         return {
             'query':   resp_obj['q'],

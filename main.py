@@ -2,11 +2,16 @@ import os
 import sys
 import uvicorn
 
-from fastapi          import FastAPI, Depends, HTTPException
+from fastapi          import FastAPI
 from routers          import match
-from starlette.status import HTTP_415_UNSUPPORTED_MEDIA_TYPE
 
-app = FastAPI()
+app = FastAPI(
+    title       = 'Project: Atlas - Backend API',
+    description = 'API used mainly for Project: Atlas chatbots and tools',
+    version     = '1.0.0dev',
+    docs_url    = '/',
+    redoc_url   = None
+)
 
 
 app.include_router(
