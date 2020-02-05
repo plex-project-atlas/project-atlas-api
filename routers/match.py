@@ -6,6 +6,7 @@ from   plexapi.myplex   import MyPlexAccount
 from   typing           import Union, List
 from   libs.tmdb        import TMDBClient
 from   libs.tvdb        import TVDBClient
+from   libs.imdb        import IMDBClient
 from   starlette.status import HTTP_200_OK, \
                                HTTP_415_UNSUPPORTED_MEDIA_TYPE, \
                                HTTP_501_NOT_IMPLEMENTED, \
@@ -15,6 +16,7 @@ from   starlette.status import HTTP_200_OK, \
 router = APIRouter()
 tmdb   = TMDBClient()
 tvdb   = TVDBClient()
+imdb   = IMDBClient()
 plex   = MyPlexAccount().resource('Project: Atlas').connect()
 
 
@@ -91,3 +93,12 @@ async def match_tvdb(title: str):
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
     return tvdb_results
+
+
+@router.get("/imdb", status_code = HTTP_200_OK)
+async def match_tvdb(title: str):
+    imdb_results = await imdb.search_show_by_name(['alien', 'limitless'])
+    if not imdb_results:
+        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
+
+    return imdb_results
