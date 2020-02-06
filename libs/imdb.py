@@ -4,7 +4,7 @@ import httpx
 import asyncio
 import urllib.parse
 
-from   typing           import Union, List
+from   typing           import List
 from   starlette.status import HTTP_200_OK
 
 
@@ -16,7 +16,7 @@ class IMDBClient:
             'Accept':          'application/json'
         }
 
-    def __get_details_from_json(self, response: httpx.Response):
+    def __get_details_from_json(self, query, query_type: str, response: httpx.Response):
         if response.status_code != HTTP_200_OK:
             return None
 
@@ -35,27 +35,25 @@ class IMDBClient:
                 if 'q' not in elem:
                     continue
                 results.append({
-                    'title': elem['l'],
-                    'guid':  elem['id'],
-                    'type':  'show' if elem['q'] == 'TV series' else 'movie',
-                    'year':  elem['y'] if 'y' in elem else None
+                    'guid':   'imdb:' + elem['id'],
+                    'title':  elem['l'],
+                    'type':   'show'       if elem['q'] == 'TV series' else 'movie',
+                    'year':   elem['y']    if 'y' in elem              else None,
+                    'poster': elem['i'][0] if 'i' in elem              else None
                 })
 
         return {
-            'query':   resp_obj['q'],
-            'results': results
+            'query':   query,
+            'results': [item for item in results if item['type'] == query_type]
         }
 
-    async def search_show_by_name(self, title: Union[ str, List[str], List[int] ]):
-        async def search_worker(client: httpx.AsyncClient, query: str, headers: dict):
+    async def search_show_by_name(self, titles: List[str], media_type: str):
+        async def search_worker(client: httpx.AsyncClient, query, query_type: str, headers: dict):
             api_endpoint = '/suggests/' + query[0].lower() + '/' + urllib.parse.quote(query, safe = '') +'.json'
             response = await client.get(url = IMDBClient.api_url + api_endpoint, headers = headers)
-            return self.__get_details_from_json(response)
+            return self.__get_details_from_json(query, query_type, response)
 
         httpx_client = httpx.AsyncClient()
-        if isinstance(title, str):
-            return await search_worker(httpx_client, title, self.api_headers)
-        else:
-            requests  = (search_worker(httpx_client, elem, self.api_headers) for elem in title)
-            responses = await asyncio.gather(*requests)
-            return responses
+        requests     = (search_worker(httpx_client, elem.strip(), media_type, self.api_headers) for elem in titles)
+        responses    = await asyncio.gather(*requests)
+        return responses

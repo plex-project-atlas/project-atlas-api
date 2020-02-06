@@ -1,75 +1,65 @@
 import os
 import httpx
+import asyncio
 
+from   typing           import List
 from   starlette.status import HTTP_200_OK
 
 
 class TMDBClient:
+    # Ref: https://developers.themoviedb.org/3 (v3)
     api_url = 'https://api.themoviedb.org/3'
 
     def __init__(self):
-        self.api_key = os.environ.get('TMDB_API_KEY')
-
-    def search_show_by_name(self, title: str, lang: str = 'it-IT'):
-        params = {
-            'language': lang,
-            'query':    title,
-            'api_key':  self.api_key
+        self.api_token   = os.environ.get('TMDB_API_TOKEN')
+        self.api_headers = {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + self.api_token if self.api_token else ''
         }
-        res = httpx.get(url = TMDBClient.api_url + '/search/tv', params = params)
 
-        if res.status_code != HTTP_200_OK:
+    def __get_show_details_from_json(self, query: str, response: httpx.Response):
+        if response.status_code != HTTP_200_OK:
             return None
 
-        json = res.json()
-
-        return [{
-            'guid':  item['id'],
-            'title': item['name'],
-            'year':  item['first_air_date'].split('-')[0] if item['first_air_date'] else None
-        } for item in json['results']]
-
-    def search_movie_by_name(self, title: str, lang: str = 'it-IT'):
-        params = {
-            'api_key':  self.api_key,
-            'language': lang,
-            'query':    title
+        resp_obj = response.json()
+        return {
+            'query': query,
+            'results': [{
+                'guid':   elem['id'],
+                'title':  elem['title'] if 'title' in elem else elem['name'],
+                'type':   'movie'       if 'title' in elem else 'show',
+                'year':   elem['release_date'].split('-')[0]   if 'release_date'   in elem and elem['release_date'] else
+                          elem['first_air_date'].split('-')[0] if 'first_air_date' in elem and ['first_air_date']   else None,
+                'poster': elem['poster_path']
+            } for elem in resp_obj['results']]
         }
-        res = httpx.get(url = TMDBClient.api_url + '/search/movie', params = params)
 
-        if res.status_code != HTTP_200_OK:
-            return None
+    async def search_movie_by_name(self, titles: List[str], lang: str = 'it-IT'):
+        async def search_worker(client: httpx.AsyncClient, query, query_lang: str, headers: dict):
+            api_endpoint = '/search/movie'
+            params = {
+                'language': query_lang,
+                'query':    query
+            }
+            response = await client.get(url = TMDBClient.api_url + api_endpoint, headers = headers, params = params)
+            return self.__get_show_details_from_json(query, response)
 
-        json = res.json()
+        httpx_client = httpx.AsyncClient()
+        requests     = (search_worker(httpx_client, elem.strip(), lang, self.api_headers) for elem in titles)
+        responses    = await asyncio.gather(*requests)
+        return responses
 
-        return [{
-            'guid':  item['id'],
-            'title': item['title'],
-            'year':  item['release_date'].split('-')[0] if item['release_date'] else None
-        } for item in json['results']]
+    async def search_show_by_name(self, titles: List[str], lang: str = 'it-IT'):
+        async def search_worker(client: httpx.AsyncClient, query, query_lang: str, headers: dict):
+            api_endpoint = '/search/tv'
+            params = {
+                'language': query_lang,
+                'query':    query
+            }
+            response = await client.get(url = TMDBClient.api_url + api_endpoint, headers = headers, params = params)
+            return self.__get_show_details_from_json(query, response)
 
-    def search_all_by_name(self, title: str, lang: str = 'it-IT'):
-        params = {
-            'api_key':  self.api_key,
-            'language': lang,
-            'query':    title
-        }
-        res = httpx.get(url = TMDBClient.api_url + '/search/multi', params = params)
-
-        if res.status_code != HTTP_200_OK:
-            return None
-
-        json    = res.json()
-        results = []
-
-        for item in json['results']:
-            if item['media_type'] in ['movie', 'tv']:
-                year = item['release_date'] if hasattr(item, 'release_date') else item['first_air_date']
-                results.append({
-                    'guid':  item['id'],
-                    'title': item['title'],
-                    'type': 'show' if item['media_type'] == 'tv' else 'movie',
-                    'year':  year.split('-')[0] if year else None
-                })
-
-        return results
+        httpx_client = httpx.AsyncClient()
+        requests     = (search_worker(httpx_client, elem.strip(), lang, self.api_headers) for elem in titles)
+        responses    = await asyncio.gather(*requests)
+        return responses

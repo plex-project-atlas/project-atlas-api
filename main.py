@@ -1,9 +1,11 @@
-import os
-import sys
 import uvicorn
 
 from fastapi          import FastAPI
 from routers          import match
+from starlette.status import HTTP_200_OK, \
+                             HTTP_404_NOT_FOUND, \
+                             HTTP_503_SERVICE_UNAVAILABLE
+
 
 app = FastAPI(
     title       = 'Project: Atlas - Backend API',
@@ -17,8 +19,13 @@ app = FastAPI(
 app.include_router(
     # import the /match branch of PlexAPI
     match.router,
-    prefix = '/match',
-    tags   = ['match']
+    prefix    = '/match',
+    tags      = ['match'],
+    responses = {
+        HTTP_200_OK:                  {},
+        HTTP_404_NOT_FOUND:           {},
+        HTTP_503_SERVICE_UNAVAILABLE: {}
+    }
 )
 
 
