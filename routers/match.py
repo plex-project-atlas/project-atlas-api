@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 
 from   fastapi             import APIRouter, Depends, Path, Query, HTTPException
@@ -96,7 +97,7 @@ def verify_tvdb_env_variables():
         Depends(verify_tmdb_env_variables),
         Depends(verify_tvdb_env_variables)
     ],
-    response_model = List[MatchResults],
+    #response_model = List[MatchResults],
     responses      = {
         HTTP_501_NOT_IMPLEMENTED: {}
     }
@@ -116,7 +117,18 @@ async def match_all(
     **Notes:**
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
-    raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED, detail = "Not Implemented")
+    requests  = [
+        imdb.search_media_by_name([title], 'movie'),
+        imdb.search_media_by_name([title], 'show'),
+        tmdb.search_movie_by_name([title]),
+        tmdb.search_show_by_name([title]),
+        tvdb.search_show_by_name([title])
+    ]
+    responses = await asyncio.gather(*requests)
+
+    responses = [result for databases in responses for database in databases for result in database['results']]
+
+    return responses
 
 
 @router.get(
@@ -158,13 +170,6 @@ async def match_plex(
     - The input string will be *splitted by commas* performing multiple, parallel requests.
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
-    suggested_env_vars = [
-        'PLEXAPI_PLEXAPI_ENABLE_FAST_CONNECT',
-        'PLEXAPI_PLEXAPI_CONTAINER_SIZE'
-    ]
-    if not all(env_var in os.environ for env_var in suggested_env_vars):
-        logging.warning('Suggested environment variables are not set, proceeding anyway...')
-
     results = []
     for title in titles.split(','):
         try:
@@ -216,7 +221,7 @@ async def match_imdb(
     - The input string will be *splitted by commas* performing multiple, parallel requests.
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
-    imdb_results = await imdb.search_show_by_name(titles.split(','), media_type)
+    imdb_results = await imdb.search_media_by_name(titles.split(','), media_type)
     if not imdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 

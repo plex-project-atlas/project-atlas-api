@@ -15,7 +15,7 @@ steps:
       - 'builder/Dockerfile'
       - '.'
 
- # Adding addtional tags...
+  # Adding addtional tags...
   - name: gcr.io/cloud-builders/docker
     id: tag-container
     entrypoint: 'bash'

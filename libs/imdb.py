@@ -2,6 +2,7 @@ import re
 import json
 import httpx
 import asyncio
+import logging
 import urllib.parse
 
 from   typing           import List
@@ -9,7 +10,7 @@ from   starlette.status import HTTP_200_OK
 
 
 class IMDBClient:
-    api_url = 'https://sg.media-imdb.com/'
+    api_url = 'https://sg.media-imdb.com'
 
     def __init__(self, lang: str = 'it'):
         self.api_headers = {
@@ -20,6 +21,7 @@ class IMDBClient:
         if response.status_code != HTTP_200_OK:
             return None
 
+        response.encoding = 'UTF-8'
         resp_obj = re.search(r'^imdb\$.+?\((.+)\)$', response.text, re.IGNORECASE | re.MULTILINE)
         if not resp_obj:
             return None
@@ -47,9 +49,10 @@ class IMDBClient:
             'results': [item for item in results if item['type'] == query_type]
         }
 
-    async def search_show_by_name(self, titles: List[str], media_type: str):
+    async def search_media_by_name(self, titles: List[str], media_type: str):
         async def search_worker(client: httpx.AsyncClient, query, query_type: str, headers: dict):
             api_endpoint = '/suggests/' + query[0].lower() + '/' + urllib.parse.quote(query, safe = '') +'.json'
+            logging.info('IMDBClient - Calling API endpoint: %s', IMDBClient.api_url + api_endpoint)
             response = await client.get(url = IMDBClient.api_url + api_endpoint, headers = headers)
             return self.__get_details_from_json(query, query_type, response)
 

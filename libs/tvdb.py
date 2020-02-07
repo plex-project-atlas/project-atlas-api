@@ -1,6 +1,7 @@
 import os
 import httpx
 import asyncio
+import logging
 
 from   typing           import Optional, List
 from   starlette.status import HTTP_200_OK
@@ -61,6 +62,7 @@ class TVDBClient:
     async def get_show_by_id(self, tvdb_ids: List[str]):
         async def search_worker(client: httpx.AsyncClient, query_id: str, headers: dict):
             api_endpoint = '/series/' + query_id
+            logging.info('TMDBClient - Calling API endpoint %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers)
             return self.__get_show_details_from_json(query_id, response)
 
@@ -75,6 +77,7 @@ class TVDBClient:
             params = {
                 'name': query
             }
+            logging.info('TMDBClient - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers, params = params)
             return self.__get_show_details_from_json(query, response)
 
