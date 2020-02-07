@@ -3,7 +3,6 @@ import uvicorn
 from fastapi          import FastAPI
 from routers          import match
 from starlette.status import HTTP_200_OK, \
-                             HTTP_404_NOT_FOUND, \
                              HTTP_503_SERVICE_UNAVAILABLE
 
 
@@ -23,7 +22,6 @@ app.include_router(
     tags      = ['match'],
     responses = {
         HTTP_200_OK:                  {},
-        HTTP_404_NOT_FOUND:           {},
         HTTP_503_SERVICE_UNAVAILABLE: {}
     }
 )

@@ -53,8 +53,8 @@ class TVDBClient:
                 'guid':  'tvdb:' + str(elem['id']),
                 'title':  elem['seriesName'],
                 'type':   'show' if 'seriesName' in elem else 'movie',
-                'year':   elem['firstAired'].split('-')[0] if elem['firstAired'] else None,
-                'poster': elem['poster']
+                'year':   elem['firstAired'].split('-')[0]        if elem['firstAired'] else None,
+                'poster': 'https://thetvdb.com' + elem['poster'] if elem['poster']     else None
             } for elem in resp_obj]
         }
 
