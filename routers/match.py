@@ -5,13 +5,12 @@ import logging
 from   fastapi             import APIRouter, Depends, Path, Query, HTTPException
 from   typing              import List
 from   pydantic            import BaseModel, AnyHttpUrl
+from   operator            import itemgetter
 from   plexapi.myplex      import MyPlexAccount, PlexServer
 from   libs.tmdb           import TMDBClient
 from   libs.tvdb           import TVDBClient
 from   libs.imdb           import IMDBClient
-from   starlette.status    import HTTP_404_NOT_FOUND, \
-                                  HTTP_415_UNSUPPORTED_MEDIA_TYPE, \
-                                  HTTP_501_NOT_IMPLEMENTED, \
+from   starlette.status    import HTTP_501_NOT_IMPLEMENTED, \
                                   HTTP_503_SERVICE_UNAVAILABLE, \
                                   HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 
@@ -118,7 +117,7 @@ async def match_all(
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
     requests  = [
-        imdb.search_media_by_name([title], 'movie'),
+        #imdb.search_media_by_name([title], 'movie'),
         imdb.search_media_by_name([title], 'show'),
         tmdb.search_movie_by_name([title]),
         tmdb.search_show_by_name([title]),
@@ -126,9 +125,23 @@ async def match_all(
     ]
     responses = await asyncio.gather(*requests)
 
-    responses = [result for databases in responses for database in databases for result in database['results']]
+    # Flatten results in one main list
+    responses = [ result for databases in responses for database in databases for result in database['results'] ]
 
-    return responses
+    matches = []
+    for elem in responses:
+        confirmed = False
+        for match in matches:
+            if elem['type'] == match['type'] and elem['title'] == match['title'] and elem['year'] == match['year']:
+                match['matches'] = match['matches'] + 1
+                confirmed = True
+                break
+        if not confirmed:
+            matches.append(elem)
+            matches[-1]['matches'] = 1
+
+    matches.sort(key = itemgetter('matches'), reverse = True)
+    return matches
 
 
 @router.get(
