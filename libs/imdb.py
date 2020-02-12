@@ -1,6 +1,7 @@
 import re
 import json
 import httpx
+import pandas
 import asyncio
 import logging
 import urllib.parse
@@ -49,7 +50,7 @@ class IMDBClient:
             'results': [item for item in results if item['type'] == query_type]
         }
 
-    async def search_media_by_name(self, titles: List[str], media_type: str):
+    async def search_media_by_name(self, titles: List[str], media_type: str = None):
         async def search_worker(client: httpx.AsyncClient, query, query_type: str, headers: dict):
             api_endpoint = '/suggests/' + query[0].lower() + '/' + urllib.parse.quote(query, safe = '') +'.json'
             logging.info('IMDBClient - Calling API endpoint: %s', IMDBClient.api_url + api_endpoint)
@@ -59,4 +60,27 @@ class IMDBClient:
         httpx_client = httpx.AsyncClient()
         requests     = (search_worker(httpx_client, elem.strip(), media_type, self.api_headers) for elem in titles)
         responses    = await asyncio.gather(*requests)
+
+        imdb_ids     = [ result['guid'].split(':')[1] for response in responses for result in response['results'] ]
+        query        = """
+            SELECT titleId, SAFE_CAST(ordering AS INT64) AS ordering, title, region, language
+            FROM `project_atlas.imdb_title_akas`
+            WHERE titleId IN (%IMDB_IDS%) AND (UPPER(region) = 'IT' OR UPPER(language) = 'IT')
+            ORDER BY titleId, SAFE_CAST(ordering AS INT64) ASC
+        """
+        query = query.replace( '%IMDB_IDS%', ','.join("'{0}'".format(imdb_id) for imdb_id in imdb_ids) )
+        df = pandas.read_gbq(
+            query,
+            project_id        = 'plex-project-atlas',
+            location          = 'europe-west3',
+            dialect           = 'standard',
+            progress_bar_type = None
+        )
+
+        for response in responses:
+            for result in response['results']:
+                italian_title = df[ df['titleId'] == result['guid'].split(':')[1] ]
+                if len(italian_title) > 0:
+                    result['title'] = italian_title['title'].iloc[0]
+
         return responses
