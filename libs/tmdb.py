@@ -40,9 +40,9 @@ class TMDBClient:
                 'guid':   'tmdb:' + str(elem['id']),
                 'title':  elem['title'] if 'title' in elem else elem['name'],
                 'type':   'movie'       if 'title' in elem else 'show',
-                'year':   elem['release_date'].split('-')[0]      if 'release_date'   in elem and elem['release_date'] else
-                          elem['first_air_date'].split('-')[0]    if 'first_air_date' in elem and ['first_air_date']   else None,
-                'poster': self.img_base_url + elem['poster_path'] if self.img_base_url        and elem['poster_path']  else None
+                'year':   elem['release_date'].split('-')[0]      if 'release_date'   in elem and elem['release_date']   else
+                          elem['first_air_date'].split('-')[0]    if 'first_air_date' in elem and elem['first_air_date'] else None,
+                'poster': self.img_base_url + elem['poster_path'] if self.img_base_url        and elem['poster_path']    else None
             } for elem in resp_obj['results']]
         }
 

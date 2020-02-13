@@ -1,3 +1,4 @@
+import os
 import re
 import json
 import httpx
@@ -47,10 +48,10 @@ class IMDBClient:
 
         return {
             'query':   query,
-            'results': [item for item in results if item['type'] == query_type]
+            'results': [item for item in results if item['type'] == query_type] if query_type else results
         }
 
-    async def search_media_by_name(self, titles: List[str], media_type: str = None):
+    async def search_media_by_name(self, titles: List[str], media_type: str = None, lang: str = 'IT'):
         async def search_worker(client: httpx.AsyncClient, query, query_type: str, headers: dict):
             api_endpoint = '/suggests/' + query[0].lower() + '/' + urllib.parse.quote(query, safe = '') +'.json'
             logging.info('IMDBClient - Calling API endpoint: %s', IMDBClient.api_url + api_endpoint)
@@ -65,14 +66,15 @@ class IMDBClient:
         query        = """
             SELECT titleId, SAFE_CAST(ordering AS INT64) AS ordering, title, region, language
             FROM `project_atlas.imdb_title_akas`
-            WHERE titleId IN (%IMDB_IDS%) AND (UPPER(region) = 'IT' OR UPPER(language) = 'IT')
+            WHERE titleId IN (%IMDB_IDS%) AND (UPPER(region) = '%LANG%' OR UPPER(language) = '%LANG%')
             ORDER BY titleId, SAFE_CAST(ordering AS INT64) ASC
         """
         query = query.replace( '%IMDB_IDS%', ','.join("'{0}'".format(imdb_id) for imdb_id in imdb_ids) )
+        query = query.replace('%LANG%', lang)
         df = pandas.read_gbq(
             query,
-            project_id        = 'plex-project-atlas',
-            location          = 'europe-west3',
+            project_id        = os.environ['IMDB_DB_PROJECT'],
+            location          = os.environ['IMDB_DB_REGION'],
             dialect           = 'standard',
             progress_bar_type = None
         )

@@ -20,7 +20,7 @@ tmdb   = TMDBClient()
 tvdb   = TVDBClient()
 imdb   = IMDBClient()
 try:
-    plex = MyPlexAccount().resource('Project: Atlas')
+    plex = MyPlexAccount().resource(os.environ['PLEXAPI_AUTH_SRV_NAME'])
     plex = PlexServer(token = plex.accessToken)
 except:
     plex = None
@@ -39,14 +39,25 @@ class ResultObject(BaseModel):
     guid:    str
     title:   str
     type:    str
-    year:    int
-    poster:  AnyHttpUrl = None
+    year:    int                = None
+    poster:  AnyHttpUrl         = None
     seasons: List[SeasonObject] = None
+
+
+class ResultAllObject(BaseModel):
+    imdb: List[ResultObject]
+    tmdb: List[ResultObject]
+    tvdb: List[ResultObject]
 
 
 class MatchResults(BaseModel):
     query:   str
     results: List[ResultObject] = []
+
+
+class MatchAllResult(BaseModel):
+    query: str
+    results: ResultAllObject
 
 
 def env_vars_check(required_env_vars, suggested_env_vars: list):
@@ -61,7 +72,8 @@ def verify_plex_env_variables():
     required  = [
         'PLEXAPI_AUTH_MYPLEX_USERNAME',
         'PLEXAPI_AUTH_MYPLEX_PASSWORD',
-        'PLEXAPI_AUTH_SERVER_BASEURL'
+        'PLEXAPI_AUTH_SERVER_BASEURL',
+        'PLEXAPI_AUTH_SRV_NAME'
     ]
     suggested = [
         'PLEXAPI_PLEXAPI_ENABLE_FAST_CONNECT',
@@ -96,7 +108,7 @@ def verify_tvdb_env_variables():
         Depends(verify_tmdb_env_variables),
         Depends(verify_tvdb_env_variables)
     ],
-    #response_model = List[MatchResults],
+    response_model = MatchAllResult,
     responses      = {
         HTTP_501_NOT_IMPLEMENTED: {}
     }
@@ -114,34 +126,26 @@ async def match_all(
     - ***title:*** must be at least 3 characters long
 
     **Notes:**
-    - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
+    - The returned object will contain _service.results.seasons_ only if _media_type_ is _show_
     """
     requests  = [
-        #imdb.search_media_by_name([title], 'movie'),
-        imdb.search_media_by_name([title], 'show'),
+        imdb.search_media_by_name([title], None),
         tmdb.search_movie_by_name([title]),
         tmdb.search_show_by_name([title]),
         tvdb.search_show_by_name([title])
     ]
     responses = await asyncio.gather(*requests)
 
-    # Flatten results in one main list
-    responses = [ result for databases in responses for database in databases for result in database['results'] ]
+    results = {
+        'query':   title,
+        'results': {
+            'imdb': responses[0][0]['results'],
+            'tmdb': responses[1][0]['results'] + responses[2][0]['results'],
+            'tvdb': responses[3][0]['results']
+        }
+    }
 
-    matches = []
-    for elem in responses:
-        confirmed = False
-        for match in matches:
-            if elem['type'] == match['type'] and elem['title'] == match['title'] and elem['year'] == match['year']:
-                match['matches'] = match['matches'] + 1
-                confirmed = True
-                break
-        if not confirmed:
-            matches.append(elem)
-            matches[-1]['matches'] = 1
-
-    matches.sort(key = itemgetter('matches'), reverse = True)
-    return matches
+    return results
 
 
 @router.get(
