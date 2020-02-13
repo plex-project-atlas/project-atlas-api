@@ -1,12 +1,11 @@
-FROM python:3.8.1-slim-buster
+FROM python:3.8.1-alpine
 
 RUN mkdir /plex-api
 
 COPY . /plex-api
 
-RUN  apt-get update && apt-get install -y gcc && \
-     yes | pip install --no-cache-dir -r /plex-api/builder/requirements.txt && \
-     rm -fr /var/lib/apt/lists/*
+RUN  apk add --no-cache build-base && \
+     yes | pip install --no-cache-dir -r /plex-api/builder/requirements.txt
 
 WORKDIR /plex-api
 
