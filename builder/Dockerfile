@@ -5,7 +5,8 @@ RUN mkdir /plex-api
 COPY . /plex-api
 
 RUN  apk add --no-cache build-base && \
-     yes | pip install --no-cache-dir -r /plex-api/builder/requirements.txt
+     yes | pip install -U setuptools && \
+     yes | pip install --no-cache-dir -U -r /plex-api/builder/requirements.txt
 
 WORKDIR /plex-api
 
