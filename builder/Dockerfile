@@ -1,22 +1,20 @@
-FROM python:3.8.1-alpine
-
-RUN mkdir /plex-api
+FROM python:3.8.1-slim
 
 COPY . /plex-api
 
-RUN  apk add --no-cache build-base && \
-     yes | pip install -U setuptools && \
-     yes | pip install --no-cache-dir -U -r /plex-api/builder/requirements.txt
-
 WORKDIR /plex-api
 
-ENV PLEXAPI_AUTH_SERVER_BASEURL http://nas.okloud.it:32400
-ENV PLEXAPI_PLEXAPI_ENABLE_FAST_CONNECT true
-ENV PLEXAPI_AUTH_SRV_NAME Project: Atlas
-ENV PLEXAPI_PLEXAPI_CONTAINER_SIZE 1000
-ENV IMDB_DB_PROJECT plex-project-atlas
-ENV IMDB_DB_REGION europe-west3
+RUN  apt-get update && apt-get install -y gcc && \
+     yes | pip install --no-cache-dir -r builder/requirements.txt && \
+     rm -fr /var/lib/apt/lists/*
 
-CMD ["python3", "/plex-api/main.py"]
+ENV PLEXAPI_AUTH_SERVER_BASEURL=http://nas.okloud.it:32400,\
+    PLEXAPI_PLEXAPI_ENABLE_FAST_CONNECT=true,\
+    PLEXAPI_AUTH_SRV_NAME="Project: Atlas",\
+    PLEXAPI_PLEXAPI_CONTAINER_SIZE=1000,\
+    IMDB_DB_PROJECT=plex-project-atlas,\
+    IMDB_DB_REGION=europe-west3
+
+CMD ["python3", "main.py"]
 
 EXPOSE 8080/tcp
