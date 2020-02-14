@@ -9,7 +9,7 @@ from starlette.status import HTTP_200_OK, \
 app = FastAPI(
     title       = 'Project: Atlas - Backend API',
     description = 'API used mainly for Project: Atlas chatbots and tools',
-    version     = '1.0.0dev',
+    version     = '1.0.0',
     docs_url    = '/',
     redoc_url   = None
 )
