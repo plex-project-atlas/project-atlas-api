@@ -1,7 +1,7 @@
 import uvicorn
 
 from fastapi          import FastAPI
-from routers          import match
+from routers          import match, telegram
 from starlette.status import HTTP_200_OK, \
                              HTTP_503_SERVICE_UNAVAILABLE
 
@@ -9,7 +9,7 @@ from starlette.status import HTTP_200_OK, \
 app = FastAPI(
     title       = 'Project: Atlas - Backend API',
     description = 'API used mainly for Project: Atlas chatbots and tools',
-    version     = '1.0.0',
+    version     = '1.5.0dev',
     docs_url    = '/',
     redoc_url   = None
 )
@@ -20,6 +20,18 @@ app.include_router(
     match.router,
     prefix    = '/match',
     tags      = ['match'],
+    responses = {
+        HTTP_200_OK:                  {},
+        HTTP_503_SERVICE_UNAVAILABLE: {}
+    }
+)
+
+
+app.include_router(
+    # import the /match branch of PlexAPI
+    telegram.router,
+    prefix    = '/telegram',
+    tags      = ['telegram'],
     responses = {
         HTTP_200_OK:                  {},
         HTTP_503_SERVICE_UNAVAILABLE: {}
