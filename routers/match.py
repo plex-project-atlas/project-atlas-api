@@ -101,7 +101,7 @@ def verify_tvdb_env_variables():
 
 
 @router.get(
-    '/',
+    '',
     summary        = 'Match all supported APIs',
     dependencies   = [
         Depends(verify_plex_env_variables),
