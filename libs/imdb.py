@@ -73,8 +73,8 @@ class IMDBClient:
         query = query.replace('%LANG%', lang)
         df = pandas.read_gbq(
             query,
-            project_id        = os.environ['IMDB_DB_PROJECT'],
-            location          = os.environ['IMDB_DB_REGION'],
+            project_id        = os.environ['DB_PROJECT'],
+            location          = os.environ['DB_REGION'],
             dialect           = 'standard',
             progress_bar_type = None
         )
