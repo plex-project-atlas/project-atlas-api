@@ -4,42 +4,84 @@ import logging
 
 from   fastapi             import APIRouter, Body, HTTPException
 from   google.cloud        import bigquery
-from   enum                import Enum
 from   typing              import Any
-from   starlette.status    import HTTP_200_OK
+from   starlette.status    import HTTP_200_OK, \
+                                  HTTP_204_NO_CONTENT
 
 
 router          = APIRouter()
+bq              = bigquery.Client()
 tg_bot_token    = os.environ['TG_BOT_TOKEN']
 tg_api_base_url = 'https://api.telegram.org/bot'
 
 
-class Intent(Enum):
-    WELCOME  = -1
-    ACTION   =  0
-    REQ_TYPE =  1
-
-
-
-class Action(dict):
-    Help       = "Aiuto"
-    Start      = "/start"
-    NewRequest = "Nuova richiesta"
-    MyRequests = "Le mie richieste"
-    SrcMovie   = "Un Film"
-    SrcShow    = "Una Serie TV"
+class Statuses(dict):
+    Welcome    = {
+        'code': -1,
+        'text': '/Start'
+    }
+    Help       = {
+        'code': -1,
+        'text': 'Aiuto'
+    }
+    Menu       = {
+        'code': 0,
+        'text': 'Menù'
+    }
+    NewRequest = {
+        'code': 1,
+        'text': 'Nuova Richiesta'
+    }
+    MyRequests = {
+        'code': 2,
+        'text': 'Le Mie Richieste'
+    }
+    SrcMovie   = {
+        'code': 3,
+        'text': 'Un Film'
+    }
+    SrcShow    = {
+        'code': 4,
+        'text': 'Una Serie TV'
+    }
 
 
 @router.post(
     '',
-    summary        = 'ProjectAtlasBot fulfilment'
+    summary        = 'ProjectAtlasBot fulfilment',
+    status_code    = HTTP_204_NO_CONTENT
 )
-async def plexa_answer(payload: Any = Body(...), status_code = 204):
-    logging.info(payload)
+async def plexa_answer( payload: Any = Body(...) ):
+    def get_user_status(user_id: int):
+        query = """
+            SELECT status
+            FROM project_atlas.tg_user_status
+            WHERE user = %USER_ID%
+        """
+        query     = query.replace( '%USER_ID%', str(user_id) )
+        query_job = bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
+        results   = query_job.result()
+        return None if results.num_rows == 0 else next(results)['status']
 
+    def register_user_status(user_id, current_status, new_status: int):
+        query = '''
+            INSERT project_atlas.tg_user_status (user, status)
+            VALUES (%USER_ID%, %USER_STATUS%)
+        ''' if current_status is None else '''
+            UPDATE project_atlas.tg_user_status
+            SET status = %USER_STATUS%
+            WHERE user = %USER_ID%
+        '''
+        query = query.replace( '%USER_ID%', str(user_id) ).replace( '%USER_STATUS%', str(new_status) )
+        query_job = bq.query(query, project=os.environ['DB_PROJECT'], location=os.environ['DB_REGION'])
+        results = query_job.result()
+
+    logging.info('[TG] - Update received: %s', payload)
+
+    status    = get_user_status(payload['message']['from']['id'])
     headers   = { 'Content-Type': 'application/json' }
     responses = {
-        Intent.WELCOME: {
+        Statuses.Welcome['code']: {
             "chat_id": payload['message']['from']['id'],
             "photo": "https://storage.googleapis.com/plex-api/icons/bulma_help.png",
             "caption": "Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n" + \
@@ -50,44 +92,44 @@ async def plexa_answer(payload: Any = Body(...), status_code = 204):
             "reply_markup": {
                 "keyboard": [
                     [{
-                        "text": Action.NewRequest
+                        "text": Statuses.NewRequest['text']
                     }],
                     [{
-                        "text": Action.MyRequests
+                        "text": Statuses.MyRequests['text']
                     }]
                 ],
                 "resize_keyboard": True,
                 "one_time_keyboard": True
             }
         },
-        Intent.ACTION: {
+        Statuses.Menu['code']: {
             "chat_id": payload['message']['from']['id'],
             "text": "Ciao\\! Come posso aiutarti oggi\\?",
             "parse_mode": "MarkdownV2",
             "reply_markup": {
                 "keyboard": [
                     [{
-                        "text": Action.NewRequest
+                        "text": Statuses.NewRequest['text']
                     }],
                     [{
-                        "text": Action.MyRequests
+                        "text": Statuses.MyRequests['text']
                     }]
                 ],
                 "resize_keyboard": True,
                 "one_time_keyboard": True
             }
         },
-        Intent.REQ_TYPE: {
+        Statuses.NewRequest['code']: {
             "chat_id": payload['message']['from']['id'],
             "text": "Benissimo, cosa vorresti aggiungere\\?",
             "parse_mode": "MarkdownV2",
             "reply_markup": {
                 "keyboard": [
                     [{
-                        "text": Action.SrcMovie
+                        "text": Statuses.SrcMovie['text']
                     }],
                     [{
-                        "text": Action.SrcShow
+                        "text": Statuses.SrcShow['text']
                     }]
                 ],
                 "resize_keyboard": True,
@@ -95,41 +137,19 @@ async def plexa_answer(payload: Any = Body(...), status_code = 204):
             }
         }
     }
+    logging.info('[TG] - Current status for user %d: %s', payload['message']['from']['id'], status)
 
     action = payload['message']['text'].strip().lower()
 
-    if action in [Action.Start, Action.Help.lower()]:
+    if action in [Statuses.Welcome['text'].lower(), Statuses.Help['text'].lower()]:
         tg_api_endpoint = '/sendPhoto'
-        response        = responses[Intent.REQ_TYPE]
+        response        = responses[ Statuses.Welcome['code']]
         send_response   = httpx.post(
             tg_api_base_url + tg_bot_token + tg_api_endpoint,
             json    = response,
             headers = headers
         )
         if send_response.status_code != HTTP_200_OK:
-            resultObj = send_response.json()
-            raise HTTPException(status_code = send_response.status_code, detail = resultObj['description'])
+            raise HTTPException(status_code = send_response.status_code, detail = 'Unable To Reply To Telegram Chat')
+        register_user_status(payload['message']['from']['id'], status, Statuses.Welcome['code'])
         return None
-
-    if action == Action.NewRequest:
-        tg_api_endpoint = '/sendMessage'
-        response = responses[Intent.NEW]
-        send_response = httpx.post(
-            tg_api_base_url + tg_bot_token + tg_api_endpoint,
-            data=response,
-            headers=headers
-        )
-        if send_response.status_code != HTTP_200_OK:
-            raise HTTPException(status_code=send_response.status_code, detail='Unable To Reply To Telegram Chat')
-        return None
-
-    bq = bigquery.Client()
-    query = """
-        SELECT status
-        FROM project_atlas.tg_user_status
-        WHERE user = %USERID%
-    """
-    query     = query.replace('%USERID%', payload['message']['from']['id'])
-    query_job = bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
-    results   = query_job.result()
-    status    = 0 if results.num_rows == 0 else next(results)['status']
