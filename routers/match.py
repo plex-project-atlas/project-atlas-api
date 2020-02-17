@@ -1,71 +1,15 @@
-import os
 import asyncio
-import logging
 
 from   fastapi             import APIRouter, Depends, Path, Query, HTTPException
 from   typing              import List
-from   pydantic            import BaseModel, AnyHttpUrl
-from   operator            import itemgetter
-from   plexapi.myplex      import MyPlexAccount, PlexServer
-from   libs.tmdb           import TMDBClient
-from   libs.tvdb           import TVDBClient
-from   libs.imdb           import IMDBClient
+from   libs.models         import env_vars_check, MatchAllResult, MatchResults
+from   starlette.requests  import Request
 from   starlette.status    import HTTP_501_NOT_IMPLEMENTED, \
                                   HTTP_503_SERVICE_UNAVAILABLE, \
                                   HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 
 
 router = APIRouter()
-tmdb   = TMDBClient()
-tvdb   = TVDBClient()
-imdb   = IMDBClient()
-try:
-    plex = MyPlexAccount().resource(os.environ['PLEXAPI_AUTH_SRV_NAME'])
-    plex = PlexServer(token = plex.accessToken)
-except:
-    plex = None
-
-
-class EpisodeObject(BaseModel):
-    title: str
-    lang:  str
-
-
-class SeasonObject(BaseModel):
-    episodes: List[EpisodeObject]
-
-
-class ResultObject(BaseModel):
-    guid:    str
-    title:   str
-    type:    str
-    year:    int                = None
-    poster:  AnyHttpUrl         = None
-    seasons: List[SeasonObject] = None
-
-
-class ResultAllObject(BaseModel):
-    imdb: List[ResultObject]
-    tmdb: List[ResultObject]
-    tvdb: List[ResultObject]
-
-
-class MatchResults(BaseModel):
-    query:   str
-    results: List[ResultObject] = []
-
-
-class MatchAllResult(BaseModel):
-    query: str
-    results: ResultAllObject
-
-
-def env_vars_check(required_env_vars, suggested_env_vars: list):
-    if not all(env_var in os.environ for env_var in required_env_vars) or not required_env_vars:
-        logging.error('Required environment variables not found, raising error...')
-        raise HTTPException(status_code = HTTP_511_NETWORK_AUTHENTICATION_REQUIRED, detail = "Network Authentication Required")
-    if not all(env_var in os.environ for env_var in suggested_env_vars):
-        logging.warning('Suggested environment variables are not set, proceeding anyway...')
 
 
 def verify_plex_env_variables():
@@ -114,6 +58,7 @@ def verify_tvdb_env_variables():
     }
 )
 async def match_all(
+        request: Request,
         title: str = Query(..., min_length = 3)
 ):
     """
@@ -129,10 +74,10 @@ async def match_all(
     - The returned object will contain _service.results.seasons_ only if _media_type_ is _show_
     """
     requests  = [
-        imdb.search_media_by_name([title], None),
-        tmdb.search_movie_by_name([title]),
-        tmdb.search_show_by_name([title]),
-        tvdb.search_show_by_name([title])
+        request.state.imdb.search_media_by_name([title], None),
+        request.state.tmdb.search_movie_by_name([title]),
+        request.state.tmdb.search_show_by_name([title]),
+        request.state.tvdb.search_show_by_name([title])
     ]
     responses = await asyncio.gather(*requests)
 
@@ -158,6 +103,7 @@ async def match_all(
     }
 )
 async def match_plex(
+        request: Request,
         media_type: str = Path(
             ...,
             title       = 'Search Type',
@@ -187,23 +133,12 @@ async def match_plex(
     - The input string will be *splitted by commas* performing multiple, parallel requests.
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
-    results = []
-    for title in titles.split(','):
-        try:
-            plex_results = plex.search(query = title.strip(), mediatype = media_type)
-            results.append({
-                'query':   title.strip(),
-                'results': [{
-                    'guid':  elem.guid,
-                    'title': elem.title,
-                    'type':  elem.type,
-                    'year':  elem.year
-                } for elem in plex_results if elem.type == media_type]
-            })
-        except:
-            raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
-    return results
+    plex_results = request.state.plex.search_media_by_name(titles.split(','), media_type)
+    if not plex_results:
+        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
+
+    return plex_results
 
 
 @router.get(
@@ -212,6 +147,7 @@ async def match_plex(
     response_model = List[MatchResults]
 )
 async def match_imdb(
+        request: Request,
         media_type: str = Path(
             ...,
             title       = 'Search Type',
@@ -238,7 +174,7 @@ async def match_imdb(
     - The input string will be *splitted by commas* performing multiple, parallel requests.
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
-    imdb_results = await imdb.search_media_by_name(titles.split(','), media_type)
+    imdb_results = await request.state.imdb.search_media_by_name(titles.split(','), media_type)
     if not imdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
@@ -255,6 +191,7 @@ async def match_imdb(
     }
 )
 async def match_tmdb(
+        request: Request,
         media_type: str = Path(
             ...,
             title       = 'Search Type',
@@ -283,9 +220,9 @@ async def match_tmdb(
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
     if media_type == 'movie':
-        tmdb_results = await tmdb.search_movie_by_name( titles.split(',') )
+        tmdb_results = await request.state.tmdb.search_movie_by_name( titles.split(',') )
     else:
-        tmdb_results = await tmdb.search_show_by_name( titles.split(',') )
+        tmdb_results = await request.state.tmdb.search_show_by_name( titles.split(',') )
     if not tmdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
@@ -302,6 +239,7 @@ async def match_tmdb(
     }
 )
 async def match_tvdb(
+        request: Request,
         media_type: str = Path(
             ...,
             title       = 'Search Type',
@@ -328,9 +266,8 @@ async def match_tvdb(
     - The input string will be *splitted by commas* performing multiple, parallel requests.
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
-    tvdb_results = await tvdb.search_show_by_name( titles.split(',') )
+    tvdb_results = await request.state.tvdb.search_show_by_name( titles.split(',') )
     if not tvdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 
     return tvdb_results
-
