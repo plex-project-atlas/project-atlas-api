@@ -11,39 +11,18 @@ from   starlette.status    import HTTP_200_OK, \
 
 router          = APIRouter()
 bq              = bigquery.Client()
-tg_bot_token    = os.environ['TG_BOT_TOKEN']
+tg_bot_token    = os.environ.get('TG_BOT_TOKEN')
 tg_api_base_url = 'https://api.telegram.org/bot'
 
 
 class Statuses(dict):
-    Welcome    = {
-        'code': -1,
-        'text': '/Start'
-    }
-    Help       = {
-        'code': -1,
-        'text': 'Aiuto'
-    }
-    Menu       = {
-        'code': 0,
-        'text': 'Menù'
-    }
-    NewRequest = {
-        'code': 1,
-        'text': 'Nuova Richiesta'
-    }
-    MyRequests = {
-        'code': 2,
-        'text': 'Le Mie Richieste'
-    }
-    SrcMovie   = {
-        'code': 3,
-        'text': 'Un Film'
-    }
-    SrcShow    = {
-        'code': 4,
-        'text': 'Una Serie TV'
-    }
+    Welcome    = { 'code': -1, 'text': '/Start' }
+    Help       = { 'code': -1, 'text': 'Aiuto'  }
+    Menu       = { 'code':  0, 'text': 'Menù'   }
+    NewRequest = { 'code':  1, 'text': 'Nuova Richiesta' }
+    MyRequests = { 'code':  2, 'text': 'Le Mie Richieste' }
+    SrcMovie   = { 'code':  3, 'text': 'Un Film' }
+    SrcShow    = { 'code':  4, 'text': 'Una Serie TV' }
 
 
 @router.post(
@@ -55,13 +34,13 @@ async def plexa_answer( payload: Any = Body(...) ):
     def get_user_status(user_id: int):
         query = """
             SELECT status
-            FROM project_atlas.tg_user_status
-            WHERE user = %USER_ID%
+            FROM   project_atlas.tg_user_status
+            WHERE  user = %USER_ID%
         """
         query     = query.replace( '%USER_ID%', str(user_id) )
         query_job = bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
         results   = query_job.result()
-        return None if results.num_rows == 0 else next(results)['status']
+        return None if results.total_rows == 0 else next( iter(results) )['status']
 
     def register_user_status(user_id, current_status, new_status: int):
         query = '''
@@ -69,11 +48,11 @@ async def plexa_answer( payload: Any = Body(...) ):
             VALUES (%USER_ID%, %USER_STATUS%)
         ''' if current_status is None else '''
             UPDATE project_atlas.tg_user_status
-            SET status = %USER_STATUS%
-            WHERE user = %USER_ID%
+            SET    status = %USER_STATUS%
+            WHERE  user = %USER_ID%
         '''
         query = query.replace( '%USER_ID%', str(user_id) ).replace( '%USER_STATUS%', str(new_status) )
-        query_job = bq.query(query, project=os.environ['DB_PROJECT'], location=os.environ['DB_REGION'])
+        query_job = bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
         results = query_job.result()
 
     logging.info('[TG] - Update received: %s', payload)
@@ -143,7 +122,7 @@ async def plexa_answer( payload: Any = Body(...) ):
 
     if action in [Statuses.Welcome['text'].lower(), Statuses.Help['text'].lower()]:
         tg_api_endpoint = '/sendPhoto'
-        response        = responses[ Statuses.Welcome['code']]
+        response        = responses[ Statuses.Welcome['code'] ]
         send_response   = httpx.post(
             tg_api_base_url + tg_bot_token + tg_api_endpoint,
             json    = response,
