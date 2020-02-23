@@ -5,6 +5,10 @@ import logging
 from   fastapi             import APIRouter, Body, HTTPException
 from   typing              import Any, List
 from   google.cloud        import bigquery
+from   plexapi.myplex      import MyPlexAccount, PlexServer
+from   libs.tmdb           import TMDBClient
+from   libs.tvdb           import TVDBClient
+from   starlette.responses import Response
 from   starlette.status    import HTTP_200_OK, \
                                   HTTP_204_NO_CONTENT
 
@@ -13,24 +17,32 @@ router          = APIRouter()
 bq              = bigquery.Client()
 tg_bot_token    = os.environ.get('TG_BOT_TOKEN')
 tg_api_base_url = 'https://api.telegram.org/bot'
+tmdb            = TMDBClient()
+tvdb            = TVDBClient()
+try:
+    plex = MyPlexAccount().resource(os.environ['PLEXAPI_AUTH_SRV_NAME'])
+    plex = PlexServer(token = plex.accessToken)
+except:
+    plex = None
 
 
 class Statuses(dict):
-    Intro      = { 'code':  -1, 'keywords': ['/Start', 'Aiuto'] }
-    Menu       = { 'code':   0, 'keywords': ['Menù']   }
-    NewRequest = { 'code': 100, 'keywords': ['Nuova Richiesta'] }
+    Intro      = { 'code':  -1, 'keywords': ['/Start', 'Aiuto']  }
+    Menu       = { 'code':   0, 'keywords': ['Menù']             }
+    NewRequest = { 'code': 100, 'keywords': ['Nuova Richiesta']  }
     MyRequests = { 'code': 200, 'keywords': ['Le Mie Richieste'] }
-    SrcMovie   = { 'code': 110, 'keywords': ['Un Film'] }
-    SrcShow    = { 'code': 120, 'keywords': ['Una Serie TV'] }
+    SrcMovie   = { 'code': 110, 'keywords': ['Un Film']          }
+    SrcShow    = { 'code': 120, 'keywords': ['Una Serie TV']     }
 
 
 @router.post(
     '',
     summary        = 'ProjectAtlasBot fulfilment',
-    status_code    = HTTP_204_NO_CONTENT
+    status_code    = HTTP_204_NO_CONTENT,
+    response_model = None
 )
 async def plexa_answer( payload: Any = Body(...) ):
-    async def get_user_status(user_id: int):
+    def get_user_status(user_id: int):
         query = """
             SELECT status
             FROM   project_atlas.tg_user_status
@@ -41,7 +53,7 @@ async def plexa_answer( payload: Any = Body(...) ):
         results   = query_job.result()
         return None if results.total_rows == 0 else next( iter(results) )['status']
 
-    async def register_user_status(user_id, current_status, new_status: int):
+    def register_user_status(user_id, current_status, new_status: int):
         query = '''
             INSERT project_atlas.tg_user_status (user, status)
             VALUES (%USER_ID%, %USER_STATUS%)
@@ -55,23 +67,23 @@ async def plexa_answer( payload: Any = Body(...) ):
         results   = query_job.result()
         return None if not results else results.total_rows
 
-    async def send_message(recipient: int, message: str, choices: List[str], img: str = None):
+    def send_message(recipient: int, message: str, choices: List[str] = None, img: str = None):
         headers = {'Content-Type': 'application/json'}
         payload = {
             'chat_id': recipient,
-
             'parse_mode': 'MarkdownV2',
-            'reply_markup': {
-                'keyboard': [ [{ 'text': choice }] for choice in choices ],
-                "resize_keyboard": True,
-                "one_time_keyboard": True
-            }
         }
         if img:
             payload['photo']   = img
             payload['caption'] = message
         else:
             payload['text']    = message
+        if choices:
+            payload['reply_markup'] = {
+                'keyboard': [ [{ 'text': choice }] for choice in choices ],
+                "resize_keyboard": True,
+                "one_time_keyboard": True
+            }
 
         tg_api_endpoint = '/sendPhoto' if img else '/sendMessage'
         send_response   = httpx.post(
@@ -86,21 +98,75 @@ async def plexa_answer( payload: Any = Body(...) ):
     logging.info('[TG] - Update received: %s', payload)
 
     user_id = payload['message']['from']['id']
-    status  = await get_user_status(user_id)
+    status  = get_user_status(user_id)
     action  = payload['message']['text'].strip().lower()
 
     logging.info('[TG] - Current status for user %d: %s', user_id, status)
 
+    # implementing "backwards" function
+    if action == 'indietro':
+        if status % 100 == 0:
+            status = 0
+        else:
+            status = status - 10 if status % 10 == 0 else status - 1
+
     if action in [keyword.lower() for keyword in Statuses.Intro['keywords']]:
-        await send_message(
+        send_message(
             user_id,
-            message ='Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
+            message = 'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
                       'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare' + \
                       'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
-                     'Scegli l\'azione desiderata e ti guiderò nel completamento della tua richiesta\\!',
+                      'Scegli l\'azione desiderata e ti guiderò nel completamento della tua richiesta\\!',
             choices = [
                 Statuses.NewRequest['keywords'][0],
                 Statuses.MyRequests['keywords'][0]
             ]
         )
-        await register_user_status(user_id, status, Statuses.Intro['code'])
+        register_user_status(user_id, status, Statuses.Intro['code'])
+
+    elif action in [keyword.lower() for keyword in Statuses.Menu['keywords']]:
+        send_message(
+            user_id,
+            message = 'Come posso aiutarti?',
+            choices = [
+                Statuses.NewRequest['keywords'][0],
+                Statuses.MyRequests['keywords'][0],
+                Statuses.Intro['keywords'][1]
+            ]
+        )
+        register_user_status(user_id, status, Statuses.Menu['code'])
+
+    elif action in [keyword.lower() for keyword in Statuses.NewRequest['keywords']]:
+        send_message(
+            user_id,
+            message = 'Stai cercando un Film o una Serie TV\\?',
+            choices = [
+                Statuses.SrcMovie['keywords'][0],
+                Statuses.SrcShow['keywords'][0]
+            ]
+        )
+        register_user_status(user_id, status, Statuses.NewRequest['code'])
+
+    elif action in [keyword.lower() for keyword in Statuses.SrcMovie['keywords']]:
+        send_message(
+            user_id,
+            message = 'Vai, spara il titolo\\!'
+        )
+        register_user_status(user_id, status, Statuses.SrcMovie['code'])
+
+    elif action in [keyword.lower() for keyword in Statuses.SrcShow['keywords']]:
+        send_message(
+            user_id,
+            message = 'Vai, spara il titolo\\!'
+        )
+        register_user_status(user_id, status, Statuses.SrcShow['code'])
+
+    elif status == Statuses.SrcMovie['code']:
+        results = await plex.search_movie_by_name([action.replace(',', '')])
+        send_message(
+            user_id,
+            message = 'Guarda cos\'ho trovato su Plex, è per caso uno di questi\\?',
+            choices = [ result['title'] + ' (' + result['year'] + ')' for result in results[0]['results'] ]
+        )
+
+    return Response(status_code = HTTP_204_NO_CONTENT)
