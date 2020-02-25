@@ -1,17 +1,27 @@
 import uvicorn
 
-from fastapi            import FastAPI
+from fastapi            import FastAPI, Depends
 from routers            import match, telegram
+from google.cloud       import bigquery
 from libs.plex          import PlexClient
 from libs.imdb          import IMDBClient
 from libs.tmdb          import TMDBClient
 from libs.tvdb          import TVDBClient
+from libs.models        import env_vars_check
 from starlette.requests import Request
 from starlette.status   import HTTP_200_OK, \
                                HTTP_503_SERVICE_UNAVAILABLE
 
 
 clients = {}
+
+
+def verify_telegram_env_variables():
+    required  = [
+        'TG_BOT_TOKEN'
+    ]
+    suggested = []
+    env_vars_check(required, suggested)
 
 
 app = FastAPI(
@@ -25,6 +35,7 @@ app = FastAPI(
 
 @app.on_event('startup')
 def instantiate_clients():
+    clients['bq']   = bigquery.Client()
     clients['plex'] = PlexClient()
     clients['imdb'] = IMDBClient()
     clients['tmdb'] = TMDBClient()
@@ -33,6 +44,7 @@ def instantiate_clients():
 
 @app.middleware('http')
 async def add_global_vars(request: Request, call_next):
+    request.state.bq   = clients['bq']
     request.state.plex = clients['plex']
     request.state.imdb = clients['imdb']
     request.state.tmdb = clients['tmdb']
@@ -55,11 +67,12 @@ app.include_router(
 
 
 app.include_router(
-    # import the /match branch of PlexAPI
+    # import the /telegram branch of PlexAPI
     telegram.router,
-    prefix    = '/telegram',
-    tags      = ['telegram'],
-    responses = {
+    prefix       = '/telegram',
+    tags         = ['telegram'],
+    dependencies = [Depends(verify_telegram_env_variables)],
+    responses    = {
         HTTP_200_OK:                  {},
         HTTP_503_SERVICE_UNAVAILABLE: {}
     }

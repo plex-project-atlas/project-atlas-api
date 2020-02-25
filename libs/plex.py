@@ -23,7 +23,7 @@ class PlexClient:
                         'guid':  elem.guid,
                         'title': elem.title,
                         'type':  elem.type,
-                        'year':  elem.year
+                        'year':  str(elem.year)
                     } for elem in plex_results if elem.type == media_type]
                 })
             except:
