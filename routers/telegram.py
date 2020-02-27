@@ -74,25 +74,26 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
 
     def send_message(
             callback_query_id: int  = None,
-            chat_id:           int  = None,
-            message:           str  = None,
+            dest_chat_id:      int  = None,
+            dest_message:      str  = None,
             img:               str  = None,
             choices:      List[str] = None
     ):
-        headers = {'Content-Type': 'application/json'}
+        response = {}
+        headers  = {'Content-Type': 'application/json'}
         if callback_query_id:
-            payload['callback_query_id'] = callback_query_id
+            response['callback_query_id'] = callback_query_id
         else:
-            payload['parse_mode'] = 'MarkdownV2'
+            response['parse_mode'] = 'MarkdownV2'
         if chat_id:
-            payload['chat_id'] = chat_id
+            response['chat_id'] = dest_chat_id
         if img:
-            payload['photo']   = img
-            payload['caption'] = message
+            response['photo']   = img
+            response['caption'] = dest_message
         elif not callback_query_id:
-            payload['text']    = message
+            response['text']    = dest_message
         if choices:
-            payload['reply_markup'] = {
+            response['reply_markup'] = {
                 'keyboard': [ [{ 'text': choice }] for choice in choices ],
                 "resize_keyboard": True,
                 "one_time_keyboard": True
@@ -101,11 +102,11 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         tg_api_endpoint = 'answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
         send_response   = httpx.post(
             tg_api_base_url + tg_bot_token + tg_api_endpoint,
-            json    = payload,
+            json    = response,
             headers = headers
         )
         if send_response.status_code != HTTP_200_OK:
-            logging.error('[TG] - Error sending message: %s', payload)
+            logging.error('[TG] - Error sending message: %s', response)
             raise HTTPException(status_code = send_response.status_code, detail = 'Unable To Reply To Telegram Chat')
 
     logging.debug('[TG] - Update received: %s', payload)
