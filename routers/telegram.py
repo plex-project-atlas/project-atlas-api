@@ -16,12 +16,28 @@ tg_api_base_url = 'https://api.telegram.org/bot'
 
 
 class Statuses(dict):
-    Intro      = { 'code':  -1, 'keywords': ['/Start', 'Aiuto']  }
-    Menu       = { 'code':   0, 'keywords': ['Menù']             }
-    NewRequest = { 'code': 100, 'keywords': ['Nuova Richiesta']  }
-    MyRequests = { 'code': 200, 'keywords': ['Le Mie Richieste'] }
-    SrcMovie   = { 'code': 110, 'keywords': ['Un Film']          }
-    SrcShow    = { 'code': 120, 'keywords': ['Una Serie TV']     }
+    Help = {
+        'code':  -1,
+        'commands': ['/start', '/help'],
+        'message':  'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
+                    'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare' + \
+                    'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
+                    'Questa è la lista di tutte le cose che posso fare:\n\n' + \
+                    '/help - Ti riporta a questo menù\n' + \
+                    '/newRequest - Richiedi una nuova aggiunta a Plex' + \
+                    '/myRequests - Accedi alla lista delle tue richieste'
+    }
+    NewRequest = {
+        'code': 100,
+        'commands': ['/newRequest'],
+        'message':  'Stai cercando un Film o una Serie TV\\?'
+    }
+    # Intro      = { 'code':  -1, 'keywords': ['/Start', 'Aiuto']  }
+    # Menu       = { 'code':   0, 'keywords': ['Menù']             }
+    # NewRequest = { 'code': 100, 'keywords': ['Nuova Richiesta']  }
+    # MyRequests = { 'code': 200, 'keywords': ['Le Mie Richieste'] }
+    # SrcMovie   = { 'code': 110, 'keywords': ['Un Film']          }
+    # SrcShow    = { 'code': 120, 'keywords': ['Una Serie TV']     }
 
 
 @router.post(
@@ -56,16 +72,24 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         results   = query_job.result()
         return None if not results else results.total_rows
 
-    def send_message(recipient: int, message: str, choices: List[str] = None, img: str = None):
+    def send_message(
+            callback_query_id: int  = None,
+            chat_id:           int  = None,
+            message:           str  = None,
+            img:               str  = None,
+            choices:      List[str] = None
+    ):
         headers = {'Content-Type': 'application/json'}
-        payload = {
-            'chat_id': recipient,
-            'parse_mode': 'MarkdownV2',
-        }
+        if callback_query_id:
+            payload['callback_query_id'] = callback_query_id
+        else:
+            payload['parse_mode'] = 'MarkdownV2'
+        if chat_id:
+            payload['chat_id'] = chat_id
         if img:
             payload['photo']   = img
             payload['caption'] = message
-        else:
+        elif not callback_query_id:
             payload['text']    = message
         if choices:
             payload['reply_markup'] = {
@@ -74,89 +98,52 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 "one_time_keyboard": True
             }
 
-        tg_api_endpoint = '/sendPhoto' if img else '/sendMessage'
+        tg_api_endpoint = 'answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
         send_response   = httpx.post(
             tg_api_base_url + tg_bot_token + tg_api_endpoint,
             json    = payload,
             headers = headers
         )
         if send_response.status_code != HTTP_200_OK:
-            logging.error('[TG] - Error send message: %s', payload)
+            logging.error('[TG] - Error sending message: %s', payload)
             raise HTTPException(status_code = send_response.status_code, detail = 'Unable To Reply To Telegram Chat')
 
-    logging.info('[TG] - Update received: %s', payload)
+    logging.debug('[TG] - Update received: %s', payload)
 
-    user_id = payload['message']['from']['id']
-    status  = get_user_status(user_id)
-    action  = payload['message']['text'].strip().lower()
+    if 'callback_query' in payload:
+        # immediately answer to callback request and close it
+        send_message(callback_query_id = payload['callback_query']['id'])
+        action   = payload['callback_query']['data']
+    elif 'entities' in payload['message']:
+        commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
+        if len(commands) > 1:
+            logging.warning('[TG] - Multiple bot commands received, keeping only the first one')
+        action   = payload['message']['text'][ commands[0]['offset']:commands[0]['length'] ]
+    else:
+        action   = None
+    message = payload['message']['text'].strip().lower()
+    chat_id = payload['message']['chat']['id']
 
-    logging.info('[TG] - Current status for user %d: %s', user_id, status)
+    logging.info('[TG] - Updated received - Chat: %s, Message: %s, Command: %s',
+                 chat_id, message, action if action else 'None')
 
-    # implementing "backwards" function
-    if action == 'indietro':
-        if status % 100 == 0:
-            status = 0
-        else:
-            status = status - 10 if status % 10 == 0 else status - 1
+    #status  = get_user_status(user_id)
+    #logging.info('[TG] - Current status for user %d: %s', user_id, status)
 
-    if action in [keyword.lower() for keyword in Statuses.Intro['keywords']]:
+    if action and action in Statuses.Help['commands']:
         send_message(
-            user_id,
-            message = 'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
-                      'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare' + \
-                      'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
-                      'Scegli l\'azione desiderata e ti guiderò nel completamento della tua richiesta\\!',
-            choices = [
-                Statuses.NewRequest['keywords'][0],
-                Statuses.MyRequests['keywords'][0]
-            ]
+            chat_id = chat_id,
+            message = Statuses.Help['message']
         )
-        register_user_status(user_id, status, Statuses.Intro['code'])
-
-    elif action in [keyword.lower() for keyword in Statuses.Menu['keywords']]:
+    elif action and action in Statuses.NewRequest['commands']:
         send_message(
-            user_id,
-            message = 'Come posso aiutarti?',
-            choices = [
-                Statuses.NewRequest['keywords'][0],
-                Statuses.MyRequests['keywords'][0],
-                Statuses.Intro['keywords'][1]
-            ]
+            chat_id = chat_id,
+            message = Statuses.NewRequest['message']
         )
-        register_user_status(user_id, status, Statuses.Menu['code'])
-
-    elif action in [keyword.lower() for keyword in Statuses.NewRequest['keywords']]:
+    else:
         send_message(
-            user_id,
-            message = 'Stai cercando un Film o una Serie TV\\?',
-            choices = [
-                Statuses.SrcMovie['keywords'][0],
-                Statuses.SrcShow['keywords'][0]
-            ]
-        )
-        register_user_status(user_id, status, Statuses.NewRequest['code'])
-
-    elif action in [keyword.lower() for keyword in Statuses.SrcMovie['keywords']]:
-        send_message(
-            user_id,
-            message = 'Vai, spara il titolo\\!'
-        )
-        register_user_status(user_id, status, Statuses.SrcMovie['code'])
-
-    elif action in [keyword.lower() for keyword in Statuses.SrcShow['keywords']]:
-        send_message(
-            user_id,
-            message = 'Vai, spara il titolo\\!'
-        )
-        register_user_status(user_id, status, Statuses.SrcShow['code'])
-
-    elif status == Statuses.SrcMovie['code']:
-        results = request.state.plex.search_movie_by_name([action.replace(',', '')])
-        send_message(
-            user_id,
-            message = 'Guarda cos\'ho trovato su Plex, è per caso uno di questi\\?',
-            choices = [ result['title'] + ' (' + result['year'] + ')' for result in results[0]['results'] ] \
-                    + ['Nessuno di questi']
+            chat_id = chat_id,
+            message = Statuses.Help['message']
         )
 
     return Response(status_code = HTTP_204_NO_CONTENT)
