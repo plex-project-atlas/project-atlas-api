@@ -109,7 +109,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             logging.error('[TG] - Error sending message: %s', response)
             raise HTTPException(status_code = send_response.status_code, detail = 'Unable To Reply To Telegram Chat')
 
-    logging.debug('[TG] - Update received: %s', payload)
+    logging.info('[TG] - Update received: %s', payload)
 
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
@@ -133,18 +133,18 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
 
     if action and action in Statuses.Help['commands']:
         send_message(
-            chat_id = chat_id,
-            message = Statuses.Help['message']
+            dest_chat_id = chat_id,
+            dest_message = Statuses.Help['message']
         )
     elif action and action in Statuses.NewRequest['commands']:
         send_message(
-            chat_id = chat_id,
-            message = Statuses.NewRequest['message']
+            dest_chat_id = chat_id,
+            dest_message = Statuses.NewRequest['message']
         )
     else:
         send_message(
-            chat_id = chat_id,
-            message = Statuses.Help['message']
+            dest_chat_id = chat_id,
+            dest_message = Statuses.Help['message']
         )
 
     return Response(status_code = HTTP_204_NO_CONTENT)
