@@ -24,13 +24,23 @@ class Statuses(dict):
                     'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
                     'Questa è la lista di tutte le cose che posso fare:\n\n' + \
                     '/help \\- Ti riporta a questo menù\n' + \
-                    '/newRequest \\- Richiedi una nuova aggiunta a Plex' + \
+                    '/newRequest \\- Richiedi una nuova aggiunta a Plex\n' + \
                     '/myRequests \\- Accedi alla lista delle tue richieste'
     }
     NewRequest = {
         'code': 100,
         'commands': ['/newRequest'],
         'message':  'Stai cercando un Film o una Serie TV\\?'
+    },
+    SrcMovie = {
+        'code': 110,
+        'commands': ['/srcMovie'],
+        'message':  'Vai, spara il titolo\\!'
+    },
+    SrcShow = {
+        'code': 120,
+        'commands': ['/srcShow'],
+        'message': 'Vai, spara il titolo\\!'
     }
     # Intro      = { 'code':  -1, 'keywords': ['/Start', 'Aiuto']  }
     # Menu       = { 'code':   0, 'keywords': ['Menù']             }
@@ -73,11 +83,11 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         return None if not results else results.total_rows
 
     def send_message(
-            callback_query_id: int  = None,
-            dest_chat_id:      int  = None,
-            dest_message:      str  = None,
-            img:               str  = None,
-            choices:      List[str] = None
+            callback_query_id: int   = None,
+            dest_chat_id:      int   = None,
+            dest_message:      str   = None,
+            img:               str   = None,
+            choices:      List[dict] = None
     ):
         response = {}
         headers  = {'Content-Type': 'application/json'}
@@ -94,7 +104,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             response['text']    = dest_message
         if choices:
             response['reply_markup'] = {
-                'keyboard': [ [{ 'text': choice }] for choice in choices ],
+                'inline_keyboard': choices,
                 "resize_keyboard": True,
                 "one_time_keyboard": True
             }
@@ -140,7 +150,21 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     elif action and action in Statuses.NewRequest['commands']:
         send_message(
             dest_chat_id = chat_id,
-            dest_message = Statuses.NewRequest['message']
+            dest_message = Statuses.NewRequest['message'],
+            choices      = [
+                { "text": "Un Film",      "callback_data": "/srcMovie" },
+                { "text": "Una Serie TV", "callback_data": "/srcShow"  }
+            ]
+        )
+    elif action and action in Statuses.SrcMovie['commands']:
+        send_message(
+            dest_chat_id = chat_id,
+            dest_message = Statuses.SrcMovie['message']
+        )
+    elif action and action in Statuses.SrcShow['commands']:
+        send_message(
+            dest_chat_id = chat_id,
+            dest_message = Statuses.SrcShow['message']
         )
     else:
         send_message(
