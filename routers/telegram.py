@@ -20,12 +20,12 @@ class Statuses(dict):
         'code':  -1,
         'commands': ['/start', '/help'],
         'message':  'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
-                    'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare' + \
+                    'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare ' + \
                     'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
                     'Questa è la lista di tutte le cose che posso fare:\n\n' + \
-                    '/help - Ti riporta a questo menù\n' + \
-                    '/newRequest - Richiedi una nuova aggiunta a Plex' + \
-                    '/myRequests - Accedi alla lista delle tue richieste'
+                    '/help \\- Ti riporta a questo menù\n' + \
+                    '/newRequest \\- Richiedi una nuova aggiunta a Plex' + \
+                    '/myRequests \\- Accedi alla lista delle tue richieste'
     }
     NewRequest = {
         'code': 100,
@@ -114,6 +114,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
         send_message(callback_query_id = payload['callback_query']['id'])
+        logging.info('Sent answer to callback query %s', payload['callback_query']['id'])
         action   = payload['callback_query']['data']
     elif 'entities' in payload['message']:
         commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
