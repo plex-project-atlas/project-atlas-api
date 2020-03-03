@@ -97,7 +97,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 'inline_keyboard': choices
             }
 
-        tg_api_endpoint = 'answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
+        tg_api_endpoint = '/answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
         send_response   = httpx.post(
             tg_api_base_url + tg_bot_token + tg_api_endpoint,
             json    = response,
