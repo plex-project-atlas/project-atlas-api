@@ -17,7 +17,7 @@ tg_api_base_url = 'https://api.telegram.org/bot'
 
 class Statuses(dict):
     Help = {
-        'code':  -1,
+        'code':     -1,
         'commands': ['/start', '/help'],
         'message':  'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
                     'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare ' + \
@@ -28,26 +28,20 @@ class Statuses(dict):
                     '/myRequests \\- Accedi alla lista delle tue richieste'
     }
     NewRequest = {
-        'code': 100,
-        'commands': ['/newRequest'],
+        'code':     100,
+        'commands': ['/NewRequest'],
         'message':  'Stai cercando un Film o una Serie TV\\?'
-    },
+    }
     SrcMovie = {
-        'code': 110,
-        'commands': ['/srcMovie'],
+        'code':     110,
+        'commands': ['/SrcMovie'],
         'message':  'Vai, spara il titolo\\!'
-    },
+    }
     SrcShow = {
-        'code': 120,
-        'commands': ['/srcShow'],
+        'code':     120,
+        'commands': ['/SrcShow'],
         'message': 'Vai, spara il titolo\\!'
     }
-    # Intro      = { 'code':  -1, 'keywords': ['/Start', 'Aiuto']  }
-    # Menu       = { 'code':   0, 'keywords': ['Menù']             }
-    # NewRequest = { 'code': 100, 'keywords': ['Nuova Richiesta']  }
-    # MyRequests = { 'code': 200, 'keywords': ['Le Mie Richieste'] }
-    # SrcMovie   = { 'code': 110, 'keywords': ['Un Film']          }
-    # SrcShow    = { 'code': 120, 'keywords': ['Una Serie TV']     }
 
 
 @router.post(
@@ -57,6 +51,16 @@ class Statuses(dict):
     response_model = None
 )
 async def plexa_answer( request: Request, payload: Any = Body(...) ):
+    def register_user_status(user_id, new_status: int):
+        query = '''
+            DELETE FROM project_atlas.tg_user_status WHERE user = %USER_ID%;
+            INSERT project_atlas.tg_user_status (user, status) VALUES (%USER_ID%, %USER_STATUS%);
+        '''
+        query     = query.replace( '%USER_ID%', str(user_id) ).replace( '%USER_STATUS%', str(new_status) )
+        query_job = request.state.bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
+        results   = query_job.result()
+        return None if not results else results.total_rows
+
     def get_user_status(user_id: int):
         query = """
             SELECT status
@@ -67,20 +71,6 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         query_job = request.state.bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
         results   = query_job.result()
         return None if results.total_rows == 0 else next( iter(results) )['status']
-
-    def register_user_status(user_id, current_status, new_status: int):
-        query = '''
-            INSERT project_atlas.tg_user_status (user, status)
-            VALUES (%USER_ID%, %USER_STATUS%)
-        ''' if current_status is None else '''
-            UPDATE project_atlas.tg_user_status
-            SET    status = %USER_STATUS%
-            WHERE  user = %USER_ID%
-        '''
-        query     = query.replace( '%USER_ID%', str(user_id) ).replace( '%USER_STATUS%', str(new_status) )
-        query_job = request.state.bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
-        results   = query_job.result()
-        return None if not results else results.total_rows
 
     def send_message(
             callback_query_id: int   = None,
@@ -139,29 +129,61 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     logging.info('[TG] - Updated received - Chat: %s, Message: %s, Command: %s',
                  chat_id, message, action if action else 'None')
 
-    #status  = get_user_status(user_id)
-    #logging.info('[TG] - Current status for user %d: %s', user_id, status)
+    # not callback action nor command, we need to parse previous status
+    if not action:
+        status  = get_user_status(chat_id)
+        logging.info('[TG] - Current status for user %d: %s', chat_id, status)
 
-    if action and action in Statuses.Help['commands']:
+        if not status:
+            send_message(
+                dest_chat_id = chat_id,
+                dest_message = Statuses.Help['message']
+            )
+        # 110 - New Movie
+        elif status == 110:
+            plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'movie')
+            send_message(
+                dest_chat_id = chat_id,
+                choices      = [{
+                    "text":          elem['title'] + ' (' + elem.year + ')',
+                    "callback_data": elem['guid']
+                } for elem in plex_results[0]['results'] ]
+            )
+        # 120 - New Show
+        elif status == 120:
+            plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'show')
+            send_message(
+                dest_chat_id = chat_id,
+                choices      = [{
+                    "text":          elem['title'] + ' (' + elem.year + ')',
+                    "callback_data": elem['guid']
+                } for elem in plex_results[0]['results'] ]
+            )
+
+        return None
+
+    if action in Statuses.Help['commands']:
         send_message(
             dest_chat_id = chat_id,
             dest_message = Statuses.Help['message']
         )
-    elif action and action in Statuses.NewRequest['commands']:
+    elif action in Statuses.NewRequest['commands']:
         send_message(
             dest_chat_id = chat_id,
             dest_message = Statuses.NewRequest['message'],
             choices      = [
-                { "text": "Un Film",      "callback_data": "/srcMovie" },
-                { "text": "Una Serie TV", "callback_data": "/srcShow"  }
+                { "text": "Un Film",      "callback_data": Statuses.SrcMovie['commands'][0] },
+                { "text": "Una Serie TV", "callback_data": Statuses.SrcShow['commands'][0]  }
             ]
         )
-    elif action and action in Statuses.SrcMovie['commands']:
+    elif action in Statuses.SrcMovie['commands']:
+        register_user_status(chat_id, Statuses.SrcMovie['code'])
         send_message(
             dest_chat_id = chat_id,
             dest_message = Statuses.SrcMovie['message']
         )
-    elif action and action in Statuses.SrcShow['commands']:
+    elif action in Statuses.SrcShow['commands']:
+        register_user_status(chat_id, Statuses.SrcShow['code'])
         send_message(
             dest_chat_id = chat_id,
             dest_message = Statuses.SrcShow['message']
