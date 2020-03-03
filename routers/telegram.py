@@ -105,25 +105,31 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         )
         if send_response.status_code != HTTP_200_OK:
             logging.error('[TG] - Error sending message (%s): %s', tg_api_endpoint, response)
+            try:
+                error_message = send_response.json()
+                logging.error('[TG] - Error message: %s', error_message['description'])
+            except:
+                pass
             raise HTTPException(status_code = send_response.status_code, detail = 'Unable To Reply To Telegram Chat')
 
     logging.info('[TG] - Update received: %s', payload)
 
+    action  = None
+    message = None
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
         send_message(callback_query_id = payload['callback_query']['id'])
         logging.info('Sent an answer to callback query %s', payload['callback_query']['id'])
         action   = payload['callback_query']['data']
-    elif 'entities' in payload['message']:
+    elif 'message' in payload and 'entities' in payload['message']:
         commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
         if len(commands) > 1:
             logging.warning('[TG] - Multiple bot commands received, keeping only the first one')
         action   = payload['message']['text'][ commands[0]['offset']:commands[0]['length'] ]
-    else:
-        action   = None
-    message = payload['message']['text'].strip().lower()
-    chat_id = payload['message']['chat']['id']
+    elif 'message' in payload:
+        message  = payload['message']['text'].strip().lower()
 
+    chat_id = payload['message']['chat']['id']
     logging.info('[TG] - Updated received - Chat: %s, Message: %s, Command: %s',
                  chat_id, message, action if action else 'None')
 
