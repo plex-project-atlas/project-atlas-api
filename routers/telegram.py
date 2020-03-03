@@ -73,11 +73,11 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         return None if results.total_rows == 0 else next( iter(results) )['status']
 
     def send_message(
-            callback_query_id: int   = None,
-            dest_chat_id:      int   = None,
-            dest_message:      str   = None,
-            img:               str   = None,
-            choices:      List[dict] = None
+            callback_query_id:  int   = None,
+            dest_chat_id:       int   = None,
+            dest_message:       str   = None,
+            img:                str   = None,
+            choices: List[List[dict]] = None
     ):
         response = {}
         headers  = {'Content-Type': 'application/json'}
@@ -142,10 +142,12 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'movie')
             send_message(
                 dest_chat_id = chat_id,
-                choices      = [{
-                    "text":          elem['title'] + ' (' + elem.year + ')',
-                    "callback_data": elem['guid']
-                } for elem in plex_results[0]['results'] ]
+                choices      = [
+                    [{
+                        "text":          elem['title'] + ' (' + elem.year + ')',
+                        "callback_data": elem['guid']
+                    }] for elem in plex_results[0]['results']
+                ]
             )
         # 120 - New Show
         elif status == 120:
