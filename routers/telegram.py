@@ -29,17 +29,17 @@ class Statuses(dict):
     }
     NewRequest = {
         'code':     100,
-        'commands': ['/NewRequest'],
+        'commands': ['/newRequest'],
         'message':  'Stai cercando un Film o una Serie TV\\?'
     }
     SrcMovie = {
         'code':     110,
-        'commands': ['/SrcMovie'],
+        'commands': ['/srcMovie'],
         'message':  'Vai, spara il titolo\\!'
     }
     SrcShow = {
         'code':     120,
-        'commands': ['/SrcShow'],
+        'commands': ['/srcShow'],
         'message': 'Vai, spara il titolo\\!'
     }
 
@@ -85,7 +85,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             response['callback_query_id'] = callback_query_id
         else:
             response['parse_mode'] = 'MarkdownV2'
-        if chat_id:
+        if dest_chat_id:
             response['chat_id'] = dest_chat_id
         if img:
             response['photo']   = img
@@ -94,9 +94,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             response['text']    = dest_message
         if choices:
             response['reply_markup'] = {
-                'inline_keyboard': choices,
-                "resize_keyboard": True,
-                "one_time_keyboard": True
+                'inline_keyboard': choices
             }
 
         tg_api_endpoint = 'answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
@@ -114,7 +112,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
         send_message(callback_query_id = payload['callback_query']['id'])
-        logging.info('Sent answer to callback query %s', payload['callback_query']['id'])
+        logging.info('Sent an answer to callback query %s', payload['callback_query']['id'])
         action   = payload['callback_query']['data']
     elif 'entities' in payload['message']:
         commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
