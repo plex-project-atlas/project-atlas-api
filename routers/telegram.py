@@ -154,10 +154,12 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'show')
             send_message(
                 dest_chat_id = chat_id,
-                choices      = [{
-                    "text":          elem['title'] + ' (' + elem.year + ')',
-                    "callback_data": elem['guid']
-                } for elem in plex_results[0]['results'] ]
+                choices      = [
+                    [{
+                        "text":          elem['title'] + ' (' + elem.year + ')',
+                        "callback_data": elem['guid']
+                    }] for elem in plex_results[0]['results']
+                ]
             )
 
         return None
@@ -172,8 +174,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             dest_chat_id = chat_id,
             dest_message = Statuses.NewRequest['message'],
             choices      = [
-                { "text": "Un Film",      "callback_data": Statuses.SrcMovie['commands'][0] },
-                { "text": "Una Serie TV", "callback_data": Statuses.SrcShow['commands'][0]  }
+                [{ "text": "Un Film",      "callback_data": Statuses.SrcMovie['commands'][0] }],
+                [{ "text": "Una Serie TV", "callback_data": Statuses.SrcShow['commands'][0]  }]
             ]
         )
     elif action in Statuses.SrcMovie['commands']:
