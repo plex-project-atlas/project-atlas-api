@@ -187,17 +187,17 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             ]
         )
     elif action in Statuses.SrcMovie['commands']:
-        register_user_status(chat_id, Statuses.SrcMovie['code'])
         send_message(
             dest_chat_id = chat_id,
             dest_message = Statuses.SrcMovie['message']
         )
+        register_user_status(chat_id, Statuses.SrcMovie['code'])
     elif action in Statuses.SrcShow['commands']:
-        register_user_status(chat_id, Statuses.SrcShow['code'])
         send_message(
             dest_chat_id = chat_id,
             dest_message = Statuses.SrcShow['message']
         )
+        register_user_status(chat_id, Statuses.SrcShow['code'])
     else:
         send_message(
             dest_chat_id = chat_id,
