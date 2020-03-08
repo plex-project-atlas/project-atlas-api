@@ -129,7 +129,9 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     elif 'message' in payload:
         message  = payload['message']['text'].strip().lower()
 
-    chat_id = payload['message']['chat']['id']
+    chat_id = payload['message']['chat']['id'] \
+              if 'callback_query' not in payload \
+              else payload['callback_query']['message']['chat']['id']
     logging.info('[TG] - Updated received - Chat: %s, Message: %s, Command: %s',
                  chat_id, message, action if action else 'None')
 
