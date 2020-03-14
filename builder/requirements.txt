@@ -6,3 +6,6 @@ asyncio==3.4.3
 plexapi==3.3.0
 pandas-gbq==0.13.0
 google-cloud-bigquery==1.24.0
+hstspreload==2020.3.4
+google-auth==1.11.2
+Click==7.0
