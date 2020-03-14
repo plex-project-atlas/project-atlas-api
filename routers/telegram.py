@@ -33,16 +33,16 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         # immediately answer to callback request and close it
         request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
         logging.info('[TG] - Answering callback query %s...', payload['callback_query']['id'])
-        action   = payload['callback_query']['data']
-        chat_id  = payload['callback_query']['message']['chat']['id']
+        chat_id = payload['callback_query']['message']['chat']['id']
+        action  = payload['callback_query']['data']
     elif 'message' in payload:
-        message  = payload['message']['text'].strip().lower()
+        chat_id = payload['message']['chat']['id']
+        message = payload['message']['text'].strip().lower()
         if 'entities' in payload['message']:
             commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
             if len(commands) > 1:
                 logging.warning('[TG] - Multiple bot commands received, keeping only the first one')
             action   = payload['message']['text'][ commands[0]['offset']:commands[0]['length'] ]
-            chat_id  = payload['message']['chat']['id']
 
     if not chat_id or not any([action, message]):
         logging.error('[TG] - Unable to process update data (Chat: %s, Command: %s, Message: %s)',
