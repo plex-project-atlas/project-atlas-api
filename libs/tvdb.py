@@ -33,15 +33,25 @@ class TVDBClient:
             'userkey':  self.usr_key,
             'apikey':   self.api_key
         }
-        response = httpx.post(url = TVDBClient.api_url + api_endpoint, headers = headers, json = payload)
+        try:
+            response = httpx.post(
+                url     = TVDBClient.api_url + api_endpoint,
+                headers = headers,
+                json    = payload,
+                timeout = 30.0
+            )
+        except httpx.TimeoutException:
+            return None
 
         if response.status_code != HTTP_200_OK:
+            logging.error('[TVDb] - Error retrieving JWT token, all future requests will fail!')
             return None
 
         resp_obj = response.json()
         return resp_obj['token']
 
-    def __get_show_details_from_json(self, query: str, response: httpx.Response):
+    @staticmethod
+    def __get_show_details_from_json(query: str, response: httpx.Response):
         if response.status_code != HTTP_200_OK:
             return None
 
