@@ -108,7 +108,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     [{
                         "text":          elem['title'] + ' (' + elem.year + ')',
                         "callback_data": elem['guid']
-                    }] for elem in plex_results[0]['results'][:5] +
+                    } for elem in plex_results[0]['results'][:5] ] +
                     [{
                         "text":          'Nessuno di questi',
                         "callback_data": 'plex:not_found'
@@ -125,7 +125,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     [{
                         "text":          elem['title'] + ' (' + elem.year + ')',
                         "callback_data": elem['guid']
-                    }] for elem in plex_results[0]['results'][:5] +
+                    } for elem in plex_results[0]['results'][:5] ] +
                     [{
                         "text":          'Nessuno di questi',
                         "callback_data": 'plex:not_found'

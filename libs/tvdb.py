@@ -1,4 +1,5 @@
 import os
+import sys
 import httpx
 import asyncio
 import logging
@@ -34,12 +35,19 @@ class TVDBClient:
             'apikey':   self.api_key
         }
         try:
-            response = httpx.post(url = TVDBClient.api_url + api_endpoint, headers = headers, json = payload)
+            response = httpx.post(
+                url     = TVDBClient.api_url + api_endpoint,
+                headers = headers,
+                json    = payload,
+                timeout = None
+            )
         except:
-            logging.error('[TVDb] - Error retrieving JWT token, all future requests will fail!')
+            error_details = sys.exc_info()
+            logging.error('[TVDb] - Error while retrieving JWT token: %s', error_details[0])
             return None
 
         if response.status_code != HTTP_200_OK:
+            logging.error('[TVDb] - Error while retrieving JWT token: APIs returned error %s', response.status_code)
             return None
 
         resp_obj = response.json()
