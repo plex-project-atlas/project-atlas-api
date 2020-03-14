@@ -1,16 +1,15 @@
 import uvicorn
-import logging
 
-from   fastapi            import FastAPI, Depends
-from   routers            import match, telegram
-from   google.cloud       import bigquery
-from   libs.plex          import PlexClient
-from   libs.imdb          import IMDBClient
-from   libs.tmdb          import TMDBClient
-from   libs.tvdb          import TVDBClient
-from   libs.models        import env_vars_check
-from   starlette.requests import Request
-from   starlette.status   import HTTP_200_OK, \
+from fastapi            import FastAPI, Depends
+from routers            import match, telegram
+from libs.plex          import PlexClient
+from libs.imdb          import IMDBClient
+from libs.tmdb          import TMDBClient
+from libs.tvdb          import TVDBClient
+from libs.telegram      import TelegramClient
+from libs.models        import env_vars_check
+from starlette.requests import Request
+from starlette.status   import HTTP_200_OK, \
                                HTTP_503_SERVICE_UNAVAILABLE
 
 
@@ -36,26 +35,20 @@ app = FastAPI(
 
 @app.on_event('startup')
 def instantiate_clients():
-    logging.info('[PlexAPI] - Server is starting up...')
-    clients['bq']   = bigquery.Client()
-    clients['plex'] = PlexClient()
-    clients['imdb'] = IMDBClient()
-    clients['tmdb'] = TMDBClient()
-    clients['tvdb'] = TVDBClient()
-
-
-@app.on_event('shutdown')
-def shutdown_event():
-    logging.info('[PlexAPI] - Server is shutting down...')
+    clients['plex']     = PlexClient()
+    clients['imdb']     = IMDBClient()
+    clients['tmdb']     = TMDBClient()
+    clients['tvdb']     = TVDBClient()
+    clients['telegram'] = TelegramClient()
 
 
 @app.middleware('http')
 async def add_global_vars(request: Request, call_next):
-    request.state.bq   = clients['bq']
-    request.state.plex = clients['plex']
-    request.state.imdb = clients['imdb']
-    request.state.tmdb = clients['tmdb']
-    request.state.tvdb = clients['tvdb']
+    request.state.plex     = clients['plex']
+    request.state.imdb     = clients['imdb']
+    request.state.tmdb     = clients['tmdb']
+    request.state.tvdb     = clients['tvdb']
+    request.state.telegram = clients['telegram']
 
     response = await call_next(request)
     return response

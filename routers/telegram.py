@@ -7,41 +7,12 @@ from   typing              import Any, List
 from   starlette.requests  import Request
 from   starlette.responses import Response
 from   starlette.status    import HTTP_200_OK, \
-                                  HTTP_204_NO_CONTENT
+                                  HTTP_204_NO_CONTENT, \
+                                  HTTP_500_INTERNAL_SERVER_ERROR, \
+                                  HTTP_501_NOT_IMPLEMENTED
 
 
 router          = APIRouter()
-tg_bot_token    = os.environ.get('TG_BOT_TOKEN')
-tg_api_base_url = 'https://api.telegram.org/bot'
-
-
-class Statuses(dict):
-    Help = {
-        'code':     -1,
-        'commands': ['/start', '/help'],
-        'message':  'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
-                    'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare ' + \
-                    'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
-                    'Questa è la lista di tutte le cose che posso fare:\n\n' + \
-                    '/help \\- Ti riporta a questo menù\n' + \
-                    '/newRequest \\- Richiedi una nuova aggiunta a Plex\n' + \
-                    '/myRequests \\- Accedi alla lista delle tue richieste'
-    }
-    NewRequest = {
-        'code':     100,
-        'commands': ['/newRequest'],
-        'message':  'Stai cercando un Film o una Serie TV\\?'
-    }
-    SrcMovie = {
-        'code':     110,
-        'commands': ['/srcMovie'],
-        'message':  'Vai, spara il titolo\\!'
-    }
-    SrcShow = {
-        'code':     120,
-        'commands': ['/srcShow'],
-        'message': 'Vai, spara il titolo\\!'
-    }
 
 
 @router.post(
@@ -51,157 +22,118 @@ class Statuses(dict):
     response_model = None
 )
 async def plexa_answer( request: Request, payload: Any = Body(...) ):
-    def register_user_status(user_id, new_status: int):
-        query = '''
-            DELETE FROM project_atlas.tg_user_status WHERE user = %USER_ID%;
-            INSERT project_atlas.tg_user_status (user, status) VALUES (%USER_ID%, %USER_STATUS%);
-        '''
-        query     = query.replace( '%USER_ID%', str(user_id) ).replace( '%USER_STATUS%', str(new_status) )
-        query_job = request.state.bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
-        results   = query_job.result()
-        return None if not results else results.total_rows
-
-    def get_user_status(user_id: int):
-        query = """
-            SELECT status
-            FROM   project_atlas.tg_user_status
-            WHERE  user = %USER_ID%
-        """
-        query     = query.replace( '%USER_ID%', str(user_id) )
-        query_job = request.state.bq.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
-        results   = query_job.result()
-        return None if results.total_rows == 0 else next( iter(results) )['status']
-
-    def send_message(
-            callback_query_id:  str   = None,
-            dest_chat_id:       str   = None,
-            dest_message:       str   = None,
-            img:                str   = None,
-            choices: List[List[dict]] = None
-    ):
-        response = {}
-        headers  = {'Content-Type': 'application/json'}
-        if callback_query_id:
-            response['callback_query_id'] = callback_query_id
-        else:
-            response['parse_mode'] = 'MarkdownV2'
-        if dest_chat_id:
-            response['chat_id'] = dest_chat_id
-        if img:
-            response['photo']   = img
-            response['caption'] = dest_message
-        elif not callback_query_id:
-            response['text']    = dest_message
-        if choices:
-            response['reply_markup'] = {
-                'inline_keyboard': choices
-            }
-
-        tg_api_endpoint = '/answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
-        send_response   = httpx.post(
-            tg_api_base_url + tg_bot_token + tg_api_endpoint,
-            json    = response,
-            headers = headers
-        )
-        if send_response.status_code != HTTP_200_OK:
-            logging.error('[TG] - Error sending message (%s): %s', tg_api_endpoint, response)
-            try:
-                error_message = send_response.json()
-                logging.error('[TG] - Error message: %s', error_message['description'])
-            except:
-                pass
-            raise HTTPException(status_code = send_response.status_code, detail = 'Unable To Reply To Telegram Chat')
-
     logging.info('[TG] - Update received: %s', payload)
+    if not any(update in payload for update in ['message', 'callback_query']):
+        logging.error('[TG] - Unexpected, unimplemented update received')
+        raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED, detail = 'Not Implemented')
 
-    action  = None
-    message = None
+    # extracting telegram's update action or message
+    action, chat_id, message = None, None, None
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
-        send_message(callback_query_id = payload['callback_query']['id'])
-        logging.info('Sent an answer to callback query %s', payload['callback_query']['id'])
+        request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
+        logging.info('[TG] - Answering callback query %s...', payload['callback_query']['id'])
         action   = payload['callback_query']['data']
-    elif 'message' in payload and 'entities' in payload['message']:
-        commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
-        if len(commands) > 1:
-            logging.warning('[TG] - Multiple bot commands received, keeping only the first one')
-        action   = payload['message']['text'][ commands[0]['offset']:commands[0]['length'] ]
+        chat_id  = payload['callback_query']['message']['chat']['id']
     elif 'message' in payload:
         message  = payload['message']['text'].strip().lower()
+        if 'entities' in payload['message']:
+            commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
+            if len(commands) > 1:
+                logging.warning('[TG] - Multiple bot commands received, keeping only the first one')
+            action   = payload['message']['text'][ commands[0]['offset']:commands[0]['length'] ]
+            chat_id  = payload['message']['chat']['id']
 
-    chat_id = payload['message']['chat']['id'] \
-              if 'callback_query' not in payload \
-              else payload['callback_query']['message']['chat']['id']
-    logging.info('[TG] - Updated received - Chat: %s, Message: %s, Command: %s',
-                 chat_id, message, action if action else 'None')
+    if not chat_id or not any([action, message]):
+        logging.error('[TG] - Unable to process update data (Chat: %s, Command: %s, Message: %s)',
+                      chat_id, action, message)
+        raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
 
-    # not callback action nor command, we need to parse previous status
-    if not action:
-        status  = get_user_status(chat_id)
-        logging.info('[TG] - Current status for user %d: %s', chat_id, status)
-
-        if not status:
-            send_message(
+    if action:
+        logging.info('[TG] - Command received: %s', action)
+        if action in request.state.telegram.Statuses.Help['commands']:
+            request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = Statuses.Help['message']
+                dest_message = request.state.telegram.Statuses.Help['message']
             )
-        # 110 - New Movie
-        elif status == 110:
+            # clearing user status code [-1]
+            request.state.telegram.register_user_status(chat_id, -1)
+        elif action in request.state.telegram.Statuses.NewRequest['commands']:
+            request.state.telegram.send_message(
+                dest_chat_id = chat_id,
+                dest_message = request.state.telegram.Statuses.NewRequest['message']
+            )
+            # clearing user status code [-1]
+            request.state.telegram.register_user_status(chat_id, -1)
+        elif action in request.state.telegram.Statuses.SrcMovie['commands']:
+            request.state.telegram.send_message(
+                dest_chat_id = chat_id,
+                dest_message = request.state.telegram.Statuses.SrcMovie['message']
+            )
+            # updating user status code
+            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcMovie['code'])
+        elif action in request.state.telegram.Statuses.SrcShow['commands']:
+            request.state.telegram.send_message(
+                dest_chat_id = chat_id,
+                dest_message = request.state.telegram.Statuses.SrcShow['message']
+            )
+            # updating user status code
+            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcShow['code'])
+        else:
+            logging.warning('[TG] - Unexpected, unimplemented command received: %s', action)
+            request.state.telegram.send_message(
+                dest_chat_id = chat_id,
+                dest_message = request.state.telegram.Statuses.Help['message']
+            )
+            # clearing user status code [-1]
+            request.state.telegram.register_user_status(chat_id, -1)
+
+    # generic message received, we need to retrieve user status
+    if message:
+        logging.info('[TG] - Message received: %s', message)
+        status = request.state.telegram.get_user_status(chat_id)
+        logging.info('[TG] - Status for user %s: %s', chat_id, status)
+
+        if status == request.state.telegram.Statuses.Help['code']:
+            request.state.telegram.send_message(
+                dest_chat_id = chat_id,
+                dest_message = request.state.telegram.Statuses.Help['message']
+            )
+        elif status == request.state.telegram.Statuses.SrcMovie['code']:
             plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'movie')
-            send_message(
+            request.state.telegram.send_message(
                 dest_chat_id = chat_id,
                 choices      = [
                     [{
                         "text":          elem['title'] + ' (' + elem.year + ')',
                         "callback_data": elem['guid']
-                    }] for elem in plex_results[0]['results']
+                    }] for elem in plex_results[0]['results'][:5] +
+                    [{
+                        "text":          'Nessuno di questi',
+                        "callback_data": 'plex:not_found'
+                    }]
                 ]
             )
-        # 120 - New Show
-        elif status == 120:
+            # updating user status code
+            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcMovie['code'] + 1)
+        elif status == request.state.telegram.Statuses.SrcShow['code']:
             plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'show')
-            send_message(
+            request.state.telegram.send_message(
                 dest_chat_id = chat_id,
                 choices      = [
                     [{
                         "text":          elem['title'] + ' (' + elem.year + ')',
                         "callback_data": elem['guid']
-                    }] for elem in plex_results[0]['results']
+                    }] for elem in plex_results[0]['results'][:5] +
+                    [{
+                        "text":          'Nessuno di questi',
+                        "callback_data": 'plex:not_found'
+                    }]
                 ]
             )
-
-        return None
-
-    if action in Statuses.Help['commands']:
-        send_message(
-            dest_chat_id = chat_id,
-            dest_message = Statuses.Help['message']
-        )
-    elif action in Statuses.NewRequest['commands']:
-        send_message(
-            dest_chat_id = chat_id,
-            dest_message = Statuses.NewRequest['message'],
-            choices      = [
-                [{ "text": "Un Film",      "callback_data": Statuses.SrcMovie['commands'][0] }],
-                [{ "text": "Una Serie TV", "callback_data": Statuses.SrcShow['commands'][0]  }]
-            ]
-        )
-    elif action in Statuses.SrcMovie['commands']:
-        send_message(
-            dest_chat_id = chat_id,
-            dest_message = Statuses.SrcMovie['message']
-        )
-        register_user_status(chat_id, Statuses.SrcMovie['code'])
-    elif action in Statuses.SrcShow['commands']:
-        send_message(
-            dest_chat_id = chat_id,
-            dest_message = Statuses.SrcShow['message']
-        )
-        register_user_status(chat_id, Statuses.SrcShow['code'])
-    else:
-        send_message(
-            dest_chat_id = chat_id,
-            dest_message = Statuses.Help['message']
-        )
+            # updating user status code
+            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcShow['code'] + 1)
+        else:
+            logging.info('[TG] - Still not implemented')
 
     return Response(status_code = HTTP_204_NO_CONTENT)
