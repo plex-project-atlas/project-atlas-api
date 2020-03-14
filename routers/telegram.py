@@ -4,6 +4,7 @@ import logging
 
 from   fastapi             import APIRouter, Body, HTTPException
 from   typing              import Any, List
+from   libs.telegram       import Statuses
 from   starlette.requests  import Request
 from   starlette.responses import Response
 from   starlette.status    import HTTP_200_OK, \
@@ -51,39 +52,39 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
 
     if action:
         logging.info('[TG] - Command received: %s', action)
-        if action in request.state.telegram.Statuses.Help['commands']:
+        if action in Statuses.Help['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = request.state.telegram.Statuses.Help['message']
+                dest_message = Statuses.Help['message']
             )
             # clearing user status code [-1]
             request.state.telegram.register_user_status(chat_id, -1)
-        elif action in request.state.telegram.Statuses.NewRequest['commands']:
+        elif action in Statuses.NewRequest['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = request.state.telegram.Statuses.NewRequest['message']
+                dest_message = Statuses.NewRequest['message']
             )
             # clearing user status code [-1]
             request.state.telegram.register_user_status(chat_id, -1)
-        elif action in request.state.telegram.Statuses.SrcMovie['commands']:
+        elif action in Statuses.SrcMovie['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = request.state.telegram.Statuses.SrcMovie['message']
+                dest_message = Statuses.SrcMovie['message']
             )
             # updating user status code
-            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcMovie['code'])
-        elif action in request.state.telegram.Statuses.SrcShow['commands']:
+            request.state.telegram.register_user_status(chat_id, Statuses.SrcMovie['code'])
+        elif action in Statuses.SrcShow['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = request.state.telegram.Statuses.SrcShow['message']
+                dest_message = Statuses.SrcShow['message']
             )
             # updating user status code
-            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcShow['code'])
+            request.state.telegram.register_user_status(chat_id, Statuses.SrcShow['code'])
         else:
             logging.warning('[TG] - Unexpected, unimplemented command received: %s', action)
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = request.state.telegram.Statuses.Help['message']
+                dest_message = Statuses.Help['message']
             )
             # clearing user status code [-1]
             request.state.telegram.register_user_status(chat_id, -1)
@@ -94,12 +95,12 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         status = request.state.telegram.get_user_status(chat_id)
         logging.info('[TG] - Status for user %s: %s', chat_id, status)
 
-        if status == request.state.telegram.Statuses.Help['code']:
+        if status == Statuses.Help['code']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = request.state.telegram.Statuses.Help['message']
+                dest_message = Statuses.Help['message']
             )
-        elif status == request.state.telegram.Statuses.SrcMovie['code']:
+        elif status == Statuses.SrcMovie['code']:
             plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'movie')
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
@@ -115,8 +116,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 ]
             )
             # updating user status code
-            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcMovie['code'] + 1)
-        elif status == request.state.telegram.Statuses.SrcShow['code']:
+            request.state.telegram.register_user_status(chat_id, Statuses.SrcMovie['code'] + 1)
+        elif status == Statuses.SrcShow['code']:
             plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'show')
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
@@ -132,7 +133,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 ]
             )
             # updating user status code
-            request.state.telegram.register_user_status(chat_id, request.state.telegram.Statuses.SrcShow['code'] + 1)
+            request.state.telegram.register_user_status(chat_id, Statuses.SrcShow['code'] + 1)
         else:
             logging.info('[TG] - Still not implemented')
 
