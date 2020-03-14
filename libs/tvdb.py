@@ -40,7 +40,7 @@ class TVDBClient:
                 json    = payload,
                 timeout = 30.0
             )
-        except httpx.TimeoutException:
+        except:
             return None
 
         if response.status_code != HTTP_200_OK:
