@@ -128,6 +128,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 )
                 return Response(status_code = HTTP_204_NO_CONTENT)
 
+            plex_results = []
             if not message.startswith('plex://'):
                 plex_results   = request.state.plex.search_media_by_name([message.strip()], 'movie') \
                                  if status == Statuses.SrcMovie['code'] else \
@@ -135,7 +136,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             elif not message.startswith('plex://not-found/'):
                 request.state.telegram.send_message(
                     dest_chat_id = chat_id,
-                    dest_message = 'Ottimo, allora ti auguro buona visione\\!'
+                    dest_message = 'Ottimo, allora ti auguro una buona visione\\!'
                 )
                 # clearing user status code [-1]
                 request.state.telegram.register_user_status(chat_id, -1)
