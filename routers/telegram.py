@@ -28,7 +28,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
         request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
-        logging.info('[TG] - Answering callback query %s...', payload['callback_query']['id'])
+        logging.info('[TG] - Answering callback query: %s', payload['callback_query']['id'])
         chat_id = payload['callback_query']['message']['chat']['id']
         action  = payload['callback_query']['data']
     elif 'message' in payload:
@@ -106,40 +106,28 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 dest_chat_id = chat_id,
                 dest_message = Statuses.Help['message']
             )
-        elif status == Statuses.SrcMovie['code']:
-            plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'movie')
+        elif status in [ Statuses.SrcMovie['code'], Statuses.SrcShow['code'] ]:
+            plex_results = request.state.plex.search_media_by_name([message.strip()], 'movie') \
+                           if status == Statuses.SrcMovie['code'] else \
+                           request.state.plex.search_media_by_name([message.strip()], 'show')
+            choices = [ [{
+                "text":          elem['title'] + ' (' + elem['year'] + ')',
+                "callback_data": elem['guid']
+            }] for elem in plex_results[0]['results'][:5] ]
+            choices.append([{
+                "text":          'Nessuno di questi',
+                "callback_data": 'plex:not_found'
+            }])
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                choices      = [
-                    [{
-                        "text":          elem['title'] + ' (' + elem.year + ')',
-                        "callback_data": elem['guid']
-                    } for elem in plex_results[0]['results'][:5] ] +
-                    [{
-                        "text":          'Nessuno di questi',
-                        "callback_data": 'plex:not_found'
-                    }]
-                ]
+                dest_message = 'Ho trovato questi titoli su Plex, è uno di loro per caso?',
+                choices      = choices
             )
             # updating user status code
-            request.state.telegram.register_user_status(chat_id, Statuses.SrcMovie['code'] + 1)
-        elif status == Statuses.SrcShow['code']:
-            plex_results = request.state.plex.search_media_by_name(message.strip().replace(',', ''), 'show')
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                choices      = [
-                    [{
-                        "text":          elem['title'] + ' (' + elem.year + ')',
-                        "callback_data": elem['guid']
-                    } for elem in plex_results[0]['results'][:5] ] +
-                    [{
-                        "text":          'Nessuno di questi',
-                        "callback_data": 'plex:not_found'
-                    }]
-                ]
+            request.state.telegram.register_user_status(
+                chat_id,
+                Statuses.SrcMovie['code'] + 1 if status == Statuses.SrcMovie['code'] else Statuses.SrcShow['code'] + 1
             )
-            # updating user status code
-            request.state.telegram.register_user_status(chat_id, Statuses.SrcShow['code'] + 1)
         else:
             logging.info('[TG] - Still not implemented')
         return Response(status_code = HTTP_204_NO_CONTENT)
