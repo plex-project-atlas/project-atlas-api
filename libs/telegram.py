@@ -99,6 +99,7 @@ class TelegramClient:
             }
 
         tg_api_endpoint = '/answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
+        logging.info('[TG] - Calling API endpoint: %s', self.tg_api_base_url + tg_api_endpoint)
         send_response   = httpx.post(
             self.tg_api_base_url + self.tg_bot_token + tg_api_endpoint,
             json    = response,

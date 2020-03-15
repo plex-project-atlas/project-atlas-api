@@ -53,7 +53,7 @@ class TMDBClient:
                 'language': query_lang,
                 'query':    query
             }
-            logging.info('TMDBClient - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
+            logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(url = TMDBClient.api_url + api_endpoint, headers = headers, params = params)
             return self.__get_show_details_from_json(query, response)
 
