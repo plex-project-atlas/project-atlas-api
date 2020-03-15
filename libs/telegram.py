@@ -98,7 +98,7 @@ class TelegramClient:
                 'inline_keyboard': choices
             }
 
-        tg_api_endpoint = 'answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
+        tg_api_endpoint = '/answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
         send_response   = httpx.post(
             self.tg_api_base_url + self.tg_bot_token + tg_api_endpoint,
             json    = response,
