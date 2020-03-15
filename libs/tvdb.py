@@ -63,7 +63,7 @@ class TVDBClient:
         return {
             'query': query,
             'results': [{
-                'guid':  'tvdb:' + str(elem['id']),
+                'guid':  'tvdb://' + str(elem['id']),
                 'title':  elem['seriesName'],
                 'type':   'show' if 'seriesName' in elem else 'movie',
                 'year':   elem['firstAired'].split('-')[0]       if elem['firstAired'] else None,
@@ -75,7 +75,7 @@ class TVDBClient:
         async def search_worker(client: httpx.AsyncClient, query_id: str, headers: dict):
             api_endpoint = '/series/' + query_id
             headers['Accept-Language'] = lang
-            logging.info('TMDBClient - Calling API endpoint %s', TVDBClient.api_url + api_endpoint)
+            logging.info('[TVDb] - Calling API endpoint %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers)
             return self.__get_show_details_from_json(query_id, response)
 
@@ -91,7 +91,7 @@ class TVDBClient:
                 'name': query
             }
             headers['Accept-Language'] = lang
-            logging.info('TMDBClient - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
+            logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers, params = params)
             return self.__get_show_details_from_json(query, response)
 

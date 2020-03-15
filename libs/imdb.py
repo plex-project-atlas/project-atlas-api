@@ -39,7 +39,7 @@ class IMDBClient:
                 if 'q' not in elem:
                     continue
                 results.append({
-                    'guid':   'imdb:' + elem['id'],
+                    'guid':   'imdb://' + elem['id'],
                     'title':  elem['l'],
                     'type':   'show'       if elem['q'] == 'TV series' else 'movie',
                     'year':   elem['y']    if 'y' in elem              else None,

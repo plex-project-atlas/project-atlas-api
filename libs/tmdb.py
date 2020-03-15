@@ -37,7 +37,7 @@ class TMDBClient:
         return {
             'query': query,
             'results': [{
-                'guid':   'tmdb:' + str(elem['id']),
+                'guid':   'tmdb://' + str(elem['id']),
                 'title':  elem['title'] if 'title' in elem else elem['name'],
                 'type':   'movie'       if 'title' in elem else 'show',
                 'year':   elem['release_date'].split('-')[0]      if 'release_date'   in elem and elem['release_date']   else
@@ -69,7 +69,7 @@ class TMDBClient:
                 'language': query_lang,
                 'query':    query
             }
-            logging.info('TMDBClient - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
+            logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(url = TMDBClient.api_url + api_endpoint, headers = headers, params = params)
             return self.__get_show_details_from_json(query, response)
 

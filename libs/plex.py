@@ -20,7 +20,7 @@ class PlexClient:
                 results.append({
                     'query':   title.strip(),
                     'results': [{
-                        'guid':  elem.guid,
+                        'guid':  'plex://' + elem.guid.split('://')[1].split('?')[0],
                         'title': elem.title,
                         'type':  elem.type,
                         'year':  str(elem.year)
