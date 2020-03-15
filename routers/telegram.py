@@ -141,6 +141,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 request.state.telegram.register_user_status(chat_id, -1)
                 return Response(status_code = HTTP_204_NO_CONTENT)
 
+            online_results = []
             if not plex_results or not plex_results[0]['results'] or message.startswith('plex://not-found/'):
                 request.state.telegram.send_message(
                     dest_chat_id = chat_id,
