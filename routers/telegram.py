@@ -1,14 +1,9 @@
-import os
-import httpx
 import logging
 
-from   fastapi             import APIRouter, Body, HTTPException
-from   typing              import Any, List
+from   fastapi             import APIRouter, Body, Request, Response, HTTPException
+from   typing              import Any
 from   libs.telegram       import Statuses
-from   starlette.requests  import Request
-from   starlette.responses import Response
-from   starlette.status    import HTTP_200_OK, \
-                                  HTTP_204_NO_CONTENT, \
+from   starlette.status    import HTTP_204_NO_CONTENT, \
                                   HTTP_500_INTERNAL_SERVER_ERROR, \
                                   HTTP_501_NOT_IMPLEMENTED
 
@@ -88,6 +83,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             )
             # clearing user status code [-1]
             request.state.telegram.register_user_status(chat_id, -1)
+        return Response(status_code = HTTP_204_NO_CONTENT)
 
     # generic message received, we need to retrieve user status
     if message:
@@ -136,5 +132,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             request.state.telegram.register_user_status(chat_id, Statuses.SrcShow['code'] + 1)
         else:
             logging.info('[TG] - Still not implemented')
+        return Response(status_code = HTTP_204_NO_CONTENT)
 
+    # fallback ending
     return Response(status_code = HTTP_204_NO_CONTENT)
