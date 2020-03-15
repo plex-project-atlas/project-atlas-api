@@ -108,9 +108,10 @@ class TelegramClient:
             error_message = None
             try:
                 error_message = send_response.json()
-                logging.error('[TG] - Error sending message: %s', error_message['description'])
+                logging.error('[TG] - Error sending message, received: %s', error_message['description'])
+                logging.error('[TG] - While sending payload: %s', response)
             except:
-                logging.error('[TG] - Error sending message: %s', response)
+                logging.error('[TG] - Error sending message while sending payload: %s', response)
             raise HTTPException(
                 status_code = send_response.status_code,
                 detail = error_message['description'] if error_message else response
