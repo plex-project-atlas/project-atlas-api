@@ -40,6 +40,11 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 logging.warning('[TG] - Multiple bot commands received, keeping only the first one')
             action   = payload['message']['text'][ commands[0]['offset']:commands[0]['length'] ]
 
+    # forwarding consecutive actions to message handling
+    if action and not action.startswith('/'):
+        message = action
+        action  = None
+
     if not chat_id or not any([action, message]):
         logging.error('[TG] - Unable to process update data (Chat: %s, Command: %s, Message: %s)',
                       chat_id, action, message)
