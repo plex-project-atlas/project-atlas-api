@@ -57,7 +57,17 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         elif action in Statuses.NewRequest['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
-                dest_message = Statuses.NewRequest['message']
+                dest_message = Statuses.NewRequest['message'],
+                choices      = [
+                    [{
+                        "text": 'Un Film',
+                        "callback_data": Statuses.SrcMovie['commands'][0]
+                    }],
+                    [{
+                        "text": 'Una Serie TV',
+                        "callback_data": Statuses.SrcShow['commands'][0]
+                    }]
+                ]
             )
             # clearing user status code [-1]
             request.state.telegram.register_user_status(chat_id, -1)
