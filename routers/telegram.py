@@ -161,7 +161,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     return Response(status_code = HTTP_204_NO_CONTENT)
 
             choices = [ [{
-                "text":          elem['title'] + ' (' + elem['year'] + ')',
+                "text":          elem['title'] + ' (' + (elem['year'] if elem['year'] else 'N/D') + ')',
                 "callback_data": elem['guid']
             }] for elem in (
                 plex_results[0]['results'][:5]
