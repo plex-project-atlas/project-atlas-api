@@ -46,6 +46,7 @@ async def get_requests(
         request.state.tvdb.get_media_by_id(tvdb_ids)
     ]
     media_ids = await asyncio.gather(*media_ids)
+    media_ids = [media_id for media_source in media_ids for media_id in media_source]
 
     for request in requests:
         media_info = [
