@@ -133,7 +133,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 plex_results   = request.state.plex.search_media_by_name([message.strip()], 'movie') \
                                  if status == Statuses.SrcMovie['code'] else \
                                  request.state.plex.search_media_by_name([message.strip()], 'show')
-            elif not message.startswith('plex://not-found/'):
+            elif not message.startswith('plex://not-found/'):  # need to check for show or movie
                 request.state.telegram.send_message(
                     dest_chat_id = chat_id,
                     dest_message = 'Ottimo, allora ti auguro una buona visione\\!'
@@ -181,11 +181,6 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                                'è per caso uno di loro?',
                 choices      = choices
             )
-            # updating user status code
-            #request.state.telegram.register_user_status(
-            #    chat_id,
-            #    Statuses.SrcMovie['code'] + 1 if status == Statuses.SrcMovie['code'] else Statuses.SrcShow['code'] + 1
-            #)
         else:
             logging.info('[TG] - Still not implemented')
         return Response(status_code = HTTP_204_NO_CONTENT)

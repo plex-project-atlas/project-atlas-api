@@ -63,39 +63,56 @@ class TVDBClient:
         return {
             'query': query,
             'results': [{
-                'guid':  'tvdb://' + str(elem['id']),
-                'title':  elem['seriesName'],
+                'guid':   'tvdb://' + str(elem['id']),
+                'title':   elem['seriesName'],
                 'type':   'show' if 'seriesName' in elem else 'movie',
-                'year':   elem['firstAired'].split('-')[0]       if elem['firstAired'] else None,
+                'year':    elem['firstAired'].split('-')[0]       if elem['firstAired'] else None,
                 'poster': 'https://thetvdb.com' + elem['poster'] if elem['poster']     else None
             } for elem in resp_obj]
         }
 
-    async def get_show_by_id(self, tvdb_ids: List[str], lang: str = 'it'):
-        async def search_worker(client: httpx.AsyncClient, query_id: str, headers: dict):
-            api_endpoint = '/series/' + query_id
-            headers['Accept-Language'] = lang
-            logging.info('[TVDb] - Calling API endpoint %s', TVDBClient.api_url + api_endpoint)
-            response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers)
-            return self.__get_show_details_from_json(query_id, response)
+    async def get_media_by_id(self, media_ids: List[dict], lang: str = 'it'):
+        async def get_worker(client: httpx.AsyncClient, media_id: str, media_type: str,
+                             media_source: str, media_lang: str, headers: dict):
+            params = None
+            headers['Accept-Language'] = media_lang
+            if media_source:
+                api_endpoint = '/search/series'
+                params = {media_source + 'Id': media_id}
+            else:
+                api_endpoint = '/' + ('movies' if media_type == 'movie' else 'series') + '/' + media_id
+            logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
+            response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers, params = params)
+            return self.__get_show_details_from_json(media_id, response)
 
         httpx_client = httpx.AsyncClient()
-        requests = (search_worker(httpx_client, elem.strip(), self.api_headers) for elem in tvdb_ids)
-        responses = await asyncio.gather(*requests)
+        requests     = [get_worker(
+            httpx_client,
+            media_id['id'],
+            media_id['type'],
+            media_id['source'] if 'source' in media_id else None,
+            lang,
+            self.api_headers
+        ) for media_id in media_ids]
+        responses    = await asyncio.gather(*requests)
         return responses
 
-    async def search_show_by_name(self, titles: List[str], lang: str = 'it'):
-        async def search_worker(client: httpx.AsyncClient, query: str, headers: dict):
+    async def search_media_by_name(self, media_titles: List[dict], lang: str = 'it'):
+        async def search_worker(client: httpx.AsyncClient, media_title, media_type, media_lang: str, headers: dict):
             api_endpoint = '/search/series'
-            params = {
-                'name': query
-            }
+            params = { 'name': media_title }
             headers['Accept-Language'] = lang
             logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers, params = params)
-            return self.__get_show_details_from_json(query, response)
+            return self.__get_show_details_from_json(media_title, response)
 
         httpx_client = httpx.AsyncClient()
-        requests = (search_worker(httpx_client, elem.strip(), self.api_headers) for elem in titles)
+        requests = [search_worker(
+            httpx_client,
+            media_title['title'],
+            media_title['type'],
+            lang,
+            self.api_headers
+        ) for media_title in media_titles]
         responses = await asyncio.gather(*requests)
         return responses

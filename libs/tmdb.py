@@ -34,46 +34,70 @@ class TMDBClient:
             return None
 
         resp_obj = response.json()
+        if 'movie_results' in resp_obj and resp_obj['movie_results']:
+            resp_obj = resp_obj['movie_results']
+        elif 'tv_results'  in resp_obj and resp_obj['tv_results']:
+            resp_obj = resp_obj['tv_results']
+        elif 'results'     in resp_obj and resp_obj['results']:
+            resp_obj = resp_obj['results']
+        else:
+            resp_obj = [resp_obj]
         return {
             'query': query,
             'results': [{
                 'guid':   'tmdb://' + str(elem['id']),
-                'title':  elem['title'] if 'title' in elem else elem['name'],
+                'title':  (elem['title'] if elem['title'] else elem['original_title']) if 'title' in elem else
+                           elem['name']  if elem['name']  else elem['original_name'],
                 'type':   'movie'       if 'title' in elem else 'show',
                 'year':   elem['release_date'].split('-')[0]      if 'release_date'   in elem and elem['release_date']   else
                           elem['first_air_date'].split('-')[0]    if 'first_air_date' in elem and elem['first_air_date'] else None,
                 'poster': self.img_base_url + elem['poster_path'] if self.img_base_url        and elem['poster_path']    else None
-            } for elem in resp_obj['results']]
+            } for elem in resp_obj]
         }
 
-    async def search_movie_by_name(self, titles: List[str], lang: str = 'it-IT'):
-        async def search_worker(client: httpx.AsyncClient, query, query_lang: str, headers: dict):
-            api_endpoint = '/search/movie'
-            params = {
-                'language': query_lang,
-                'query':    query
-            }
+    async def get_media_by_id(self, media_ids: List[dict], lang: str = 'it-IT'):
+        async def get_worker(client: httpx.AsyncClient, media_id: str, media_type: str,
+                             media_source: str, media_lang: str, headers: dict):
+            params = { 'language': media_lang }
+            if media_source:
+                params['external_source'] = media_source + '_id'
+                api_endpoint = '/find/' + media_id
+            else:
+                api_endpoint = '/' + ('tv' if media_type == 'show' else media_type) + '/' + media_id
             logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(url = TMDBClient.api_url + api_endpoint, headers = headers, params = params)
-            return self.__get_show_details_from_json(query, response)
+            return self.__get_show_details_from_json(media_id, response)
 
         httpx_client = httpx.AsyncClient()
-        requests     = (search_worker(httpx_client, elem.strip(), lang, self.api_headers) for elem in titles)
+        requests     = [get_worker(
+            httpx_client,
+            media_id['id'],
+            media_id['type'],
+            media_id['source'] if 'source' in media_id else None,
+            lang,
+            self.api_headers
+        ) for media_id in media_ids]
         responses    = await asyncio.gather(*requests)
         return responses
 
-    async def search_show_by_name(self, titles: List[str], lang: str = 'it-IT'):
-        async def search_worker(client: httpx.AsyncClient, query, query_lang: str, headers: dict):
-            api_endpoint = '/search/tv'
+    async def search_media_by_name(self, media_titles: List[dict], lang: str = 'it-IT'):
+        async def search_worker(client: httpx.AsyncClient, media_title, media_type, media_lang: str, headers: dict):
+            api_endpoint = '/search/' + ('tv' if media_type == 'show' else media_type)
             params = {
-                'language': query_lang,
-                'query':    query
+                'language': media_lang,
+                'query':    media_title
             }
             logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(url = TMDBClient.api_url + api_endpoint, headers = headers, params = params)
-            return self.__get_show_details_from_json(query, response)
+            return self.__get_show_details_from_json(media_title, response)
 
         httpx_client = httpx.AsyncClient()
-        requests     = (search_worker(httpx_client, elem.strip(), lang, self.api_headers) for elem in titles)
+        requests     = [search_worker(
+            httpx_client,
+            media_title['title'],
+            media_title['type'],
+            lang,
+            self.api_headers
+        ) for media_title in media_titles]
         responses    = await asyncio.gather(*requests)
         return responses
