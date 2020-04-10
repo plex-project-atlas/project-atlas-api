@@ -1,3 +1,5 @@
+import time
+import logging
 import uvicorn
 
 from fastapi            import FastAPI, Depends
@@ -16,6 +18,7 @@ from starlette.status   import HTTP_200_OK, \
                                HTTP_503_SERVICE_UNAVAILABLE
 
 
+cache   = {}
 clients = {}
 
 
@@ -48,6 +51,7 @@ def instantiate_clients():
 
 @app.middleware('http')
 async def add_global_vars(request: Request, call_next):
+    request.state.cache    = cache
     request.state.plex     = clients['plex']
     request.state.imdb     = clients['imdb']
     request.state.tmdb     = clients['tmdb']
@@ -55,7 +59,9 @@ async def add_global_vars(request: Request, call_next):
     request.state.telegram = clients['telegram']
     request.state.requests = clients['requests']
 
+    start_time = time.time()
     response = await call_next(request)
+    logging.info( '[FastAPI] - The request was completed in: %ss', '{:.2f}'.format(time.time() - start_time) )
     return response
 
 
@@ -86,9 +92,9 @@ app.include_router(
 app.include_router(
     # import the /requests branch of PlexAPI
     requests.router,
-    prefix = '/requests',
-    tags   = ['requests'],
-    responses={
+    prefix    = '/requests',
+    tags      = ['requests'],
+    responses = {
         HTTP_200_OK: {},
         HTTP_204_NO_CONTENT: {},
         HTTP_503_SERVICE_UNAVAILABLE: {}

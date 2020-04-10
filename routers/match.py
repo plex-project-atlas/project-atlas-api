@@ -21,7 +21,7 @@ router = APIRouter()
     response_model = ResultObject
 )
 async def match_id(
-    request: Request,
+    request:    Request,
     media_type: str = Path(
         ...,
         title       = 'Search Type',
@@ -53,32 +53,25 @@ async def match_id(
     **Notes:**
     - The returned object will contain _service.results.seasons_ only if _media_type_ is _show_
     """
-    media_info = None
     if media_db == 'imdb':
         media_info = await request.state.tmdb.get_media_by_id([{
             'id':     media_id,
             'type':   media_type,
             'source': media_db
         }])
-        #media_info = await request.state.imdb.get_media_by_id([media_id], media_type, False)
-        #if media_info:
-        #    media_info = {
-        #        'guid':   media_info[0]['mediaTitleId'],
-        #        'title':  media_info[0]['mediaTranslatedTitle'] if media_info[0]['mediaTranslatedTitle']
-        #                  else media_info[0]['mediaOriginalTitle'],
-        #        'type':   media_type,
-        #        'year':   media_info[0]['mediaYear'],
-        #        'poster': None
-        #    }
     elif media_db == 'tmdb':
         media_info = await request.state.tmdb.get_media_by_id([{'id': media_id, 'type': media_type}])
     elif media_db == 'tvdb':
-        media_info = await request.state.tvdb.get_media_by_id([{'id': media_id, 'type': media_type}])
+        media_info = await request.state.tvdb.get_media_by_id([{
+            'id':   media_id,
+            'type': media_type
+        }], request.state.cache)
     else:
         raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED, detail = 'Not Implemented')
 
     if not media_info:
-        raise HTTPException(status_code = HTTP_404_NOT_FOUND, detail = 'Not Found')
+        raise HTTPException(status_code = HTTP_404_NOT_FOUND,       detail = 'Not Found')
 
     media_info = media_info[0]['results'][0] if media_info and 'results' in media_info[0] else None
+
     return media_info

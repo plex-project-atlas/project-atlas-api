@@ -43,7 +43,7 @@ async def get_requests(
     media_ids = [
         request.state.tmdb.get_media_by_id(imdb_ids),
         request.state.tmdb.get_media_by_id(tmdb_ids),
-        request.state.tvdb.get_media_by_id(tvdb_ids)
+        request.state.tvdb.get_media_by_id(tvdb_ids, request.state.cache)
     ]
     media_ids = await asyncio.gather(*media_ids)
     media_ids = [media_id for media_source in media_ids for media_id in media_source]

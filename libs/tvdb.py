@@ -1,11 +1,15 @@
 import os
+import re
 import sys
+import time
 import httpx
 import asyncio
 import logging
 
 from   typing           import Optional, List
 from   starlette.status import HTTP_200_OK
+
+CACHE_VALIDITY = 86400  # 1 day
 
 
 class TVDBClient:
@@ -63,56 +67,82 @@ class TVDBClient:
         return {
             'query': query,
             'results': [{
-                'guid':   'tvdb://' + str(elem['id']),
+                'guid':   'tvdb://' + ('show' if 'seriesName' in elem else 'movie') + '/' + str(elem['id']),
                 'title':   elem['seriesName'],
                 'type':   'show' if 'seriesName' in elem else 'movie',
-                'year':    elem['firstAired'].split('-')[0]       if elem['firstAired'] else None,
+                'year':    elem['firstAired'].split('-')[0]      if elem['firstAired'] else None,
                 'poster': 'https://thetvdb.com' + elem['poster'] if elem['poster']     else None
             } for elem in resp_obj]
         }
 
-    async def get_media_by_id(self, media_ids: List[dict], lang: str = 'it'):
-        async def get_worker(client: httpx.AsyncClient, media_id: str, media_type: str,
-                             media_source: str, media_lang: str, headers: dict):
+    async def get_media_by_id(self, media_ids: List[dict], media_cache: dict, media_lang: str = 'it'):
+        async def get_worker(client: httpx.AsyncClient, media_id, media_type: str, media_source: str = None):
+            cache_key = 'tvdb://' + media_type + '/' + media_id
+            if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
+                logging.info('[TVDb] - Cache hit for key: %s', cache_key)
+                return media_cache[cache_key]['fill_data']
+
             params = None
-            headers['Accept-Language'] = media_lang
+            self.api_headers['Accept-Language'] = media_lang
             if media_source:
                 api_endpoint = '/search/series'
                 params = {media_source + 'Id': media_id}
             else:
                 api_endpoint = '/' + ('movies' if media_type == 'movie' else 'series') + '/' + media_id
             logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
-            response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers, params = params)
-            return self.__get_show_details_from_json(media_id, response)
+            response = await client.get(
+                url = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
+            )
+            media_search = self.__get_show_details_from_json(media_id, response)
+            media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': media_search }
+
+            return media_search
 
         httpx_client = httpx.AsyncClient()
         requests     = [get_worker(
             httpx_client,
             media_id['id'],
             media_id['type'],
-            media_id['source'] if 'source' in media_id else None,
-            lang,
-            self.api_headers
+            media_id['source'] if 'source' in media_id else None
         ) for media_id in media_ids]
         responses    = await asyncio.gather(*requests)
         return responses
 
-    async def search_media_by_name(self, media_titles: List[dict], lang: str = 'it'):
-        async def search_worker(client: httpx.AsyncClient, media_title, media_type, media_lang: str, headers: dict):
-            api_endpoint = '/search/series'
+    async def search_media_by_name(self, media_titles: List[dict], media_cache: dict, media_lang: str = 'it'):
+        async def search_worker(client: httpx.AsyncClient, media_title, media_type: str):
+            cache_key = 'tvdb://search/' + re.sub(r'\W', '_', media_title)
+            if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
+                logging.info('[TVDb] - Cache hit for key: %s', cache_key)
+                return {
+                    'query':   media_title,
+                    'results': [
+                        media_cache[media_info]['fill_data']
+                        for media_info in media_cache[cache_key]['fill_data']
+                    ]
+                }
+
+            api_endpoint = '/search' + ('/series' if media_type == 'show' else '')
             params = { 'name': media_title }
-            headers['Accept-Language'] = lang
+            self.api_headers['Accept-Language'] = media_lang
             logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
-            response = await client.get(url = TVDBClient.api_url + api_endpoint, headers = headers, params = params)
-            return self.__get_show_details_from_json(media_title, response)
+            response = await client.get(
+                url = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
+            )
+            media_search = self.__get_show_details_from_json(media_title, response)
+
+            media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': [] }
+            for media_info in media_search['results']:
+                media_cache[cache_key]['fill_data'].append(media_info['guid'])
+                media_cache[ media_info['guid'] ] = { 'fill_date': time.time(), 'fill_data': media_info }
+
+            return media_search
 
         httpx_client = httpx.AsyncClient()
-        requests = [search_worker(
+        requests     = [search_worker(
             httpx_client,
             media_title['title'],
-            media_title['type'],
-            lang,
-            self.api_headers
+            media_title['type']
         ) for media_title in media_titles]
-        responses = await asyncio.gather(*requests)
+        responses    = await asyncio.gather(*requests)
+
         return responses

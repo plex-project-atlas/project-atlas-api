@@ -244,7 +244,7 @@ async def search_tvdb(
     tvdb_results = await request.state.tvdb.search_media_by_name([{
         'title': media_title.strip(),
         'type':  media_type
-    } for media_title in media_titles.split(',')])
+    } for media_title in media_titles.split(',')], request.state.cache)
 
     if not tvdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
