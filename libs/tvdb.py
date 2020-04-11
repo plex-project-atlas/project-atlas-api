@@ -62,7 +62,12 @@ class TVDBClient:
         if response.status_code != HTTP_200_OK:
             return None
 
-        resp_obj = response.json()
+        try:
+            resp_obj = response.json()
+        except:
+            logging.error('[TVDb] - Error while parsing results: %s', response.request.url)
+            return None
+
         resp_obj = resp_obj['data'] if isinstance(resp_obj['data'], list) else [ resp_obj['data'] ]
         return {
             'query': query,

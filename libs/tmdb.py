@@ -37,7 +37,13 @@ class TMDBClient:
         if response.status_code != HTTP_200_OK:
             return None
 
-        resp_obj = response.json()
+        try:
+            resp_obj = response.json()
+        except:
+            logging.error('[TMDb] - Error while parsing results: %s', response.request.url)
+            return None
+
+        total_pages = resp_obj['total_pages'] if 'total_pages' in resp_obj else 1
         if 'movie_results' in resp_obj and resp_obj['movie_results']:
             resp_obj = resp_obj['movie_results']
         elif 'tv_results'  in resp_obj and resp_obj['tv_results']:
@@ -48,6 +54,7 @@ class TMDBClient:
             resp_obj = [resp_obj]
         return {
             'query': query,
+            'total_pages': total_pages,
             'results': [{
                 'guid':   'tmdb://' + ('movie' if 'title' in elem else 'show') + '/' + str(elem['id']),
                 'title':  (elem['title'] if elem['title']   else elem['original_title']) if 'title' in elem else
@@ -92,7 +99,7 @@ class TMDBClient:
         return responses
 
     async def search_media_by_name(self, media_titles: List[dict], media_cache: dict, media_lang: str = 'it-IT'):
-        async def search_worker(client: httpx.AsyncClient, media_title, media_type: str):
+        async def search_worker(client: httpx.AsyncClient, media_title, media_type: str, page: int = 1):
             cache_key = 'tmdb://search/' + re.sub(r'\W', '_', media_title)
             if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
                 logging.info('[TMDb] - Cache hit for key: %s', cache_key)
@@ -105,12 +112,22 @@ class TMDBClient:
                 }
 
             api_endpoint = '/search/' + ('tv' if media_type == 'show' else media_type)
-            params       = { 'language': media_lang, 'query': media_title }
+            params       = { 'language': media_lang, 'query': media_title, 'page': page }
             logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(
                 url  = TMDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
             media_search = self.__get_show_details_from_json(media_title, response)
+            if page == 1 and media_search['total_pages'] > 1:
+                media_search_pages = [search_worker(
+                    client, media_title, media_type, media_page)
+                for media_page in range(2, media_search['total_pages'] + 1)]
+                media_search_pages = await asyncio.gather(*media_search_pages)
+                media_search_pages = [media_search] + media_search_pages
+                media_search = {
+                    'query':   media_search['query'],
+                    'results': [ result for media_search_page in media_search_pages for result in media_search_page['results'] ]
+                }
 
             media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': [] }
             for media_info in media_search['results']:
