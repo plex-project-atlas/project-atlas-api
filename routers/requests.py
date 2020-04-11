@@ -41,8 +41,8 @@ async def get_requests(
     } for request in requests if request['request_id'].startswith('tvdb')]
 
     media_ids = [
-        request.state.tmdb.get_media_by_id(imdb_ids),
-        request.state.tmdb.get_media_by_id(tmdb_ids),
+        request.state.tmdb.get_media_by_id(imdb_ids, request.state.cache),
+        request.state.tmdb.get_media_by_id(tmdb_ids, request.state.cache),
         request.state.tvdb.get_media_by_id(tvdb_ids, request.state.cache)
     ]
     media_ids = await asyncio.gather(*media_ids)

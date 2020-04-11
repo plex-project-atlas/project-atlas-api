@@ -86,7 +86,7 @@ class TVDBClient:
             self.api_headers['Accept-Language'] = media_lang
             if media_source:
                 api_endpoint = '/search/series'
-                params = {media_source + 'Id': media_id}
+                params = { media_source + 'Id': media_id }
             else:
                 api_endpoint = '/' + ('movies' if media_type == 'movie' else 'series') + '/' + media_id
             logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
@@ -122,11 +122,11 @@ class TVDBClient:
                 }
 
             api_endpoint = '/search' + ('/series' if media_type == 'show' else '')
-            params = { 'name': media_title }
+            params       = { 'name': media_title }
             self.api_headers['Accept-Language'] = media_lang
             logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(
-                url = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
+                url  = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
             media_search = self.__get_show_details_from_json(media_title, response)
 

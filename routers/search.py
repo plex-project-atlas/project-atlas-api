@@ -196,7 +196,7 @@ async def search_tmdb(
     tmdb_results = await request.state.tmdb.search_media_by_name([{
         'title': media_title.strip(),
         'type':  media_type
-    } for media_title in media_titles.split(',')])
+    } for media_title in media_titles.split(',')], request.state.cache)
 
     if not tmdb_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')

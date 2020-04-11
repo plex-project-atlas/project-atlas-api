@@ -38,8 +38,7 @@ async def match_id(
         ...,
         title       = 'Search Type',
         description = 'The type of media you are searching for',
-        regex       = '^\w+$',
-        min_length  = 5
+        regex       = '^\w+$'
     )
 ):
     """
@@ -58,9 +57,12 @@ async def match_id(
             'id':     media_id,
             'type':   media_type,
             'source': media_db
-        }])
+        }], request.state.cache)
     elif media_db == 'tmdb':
-        media_info = await request.state.tmdb.get_media_by_id([{'id': media_id, 'type': media_type}])
+        media_info = await request.state.tmdb.get_media_by_id([{
+            'id':   media_id,
+            'type': media_type
+        }], request.state.cache)
     elif media_db == 'tvdb':
         media_info = await request.state.tvdb.get_media_by_id([{
             'id':   media_id,
