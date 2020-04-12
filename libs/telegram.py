@@ -68,7 +68,7 @@ class TelegramClient:
             logging.error('[TG] - Error while retrieving user status')
             raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
 
-        return ds_entity['fill_data'] if time.time() - ds_entity['fill_date'] < CACHE_VALIDITY else -1
+        return ds_entity['fill_data'] if ds_entity and time.time() - ds_entity['fill_date'] < CACHE_VALIDITY else -1
 
     def send_message(
             self,
