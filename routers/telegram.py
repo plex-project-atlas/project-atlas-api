@@ -152,9 +152,15 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 )
                 search_title = message.replace('plex://not-found/', '') if message.startswith('plex://not-found/') \
                                else message
-                online_results = await request.state.tmdb.search_movie_by_name([search_title], 'movie') \
+                online_results = await request.state.tmdb.search_media_by_name([{
+                                     'title': search_title,
+                                     'type': 'movie'
+                                 }], request.state.cache) \
                                  if user_status == Statuses.SrcMovie['code'] else \
-                                 await request.state.tvdb.search_show_by_name([search_title], 'show')
+                                 await request.state.tvdb.search_media_by_name([{
+                                     'title': search_title,
+                                     'type': 'show'
+                                 }], request.state.cache)
                 if not online_results or not online_results[0]['results']:
                     request.state.telegram.send_message(
                         dest_chat_id = chat_id,
