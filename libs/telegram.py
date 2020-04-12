@@ -1,10 +1,16 @@
 import os
+import time
 import httpx
 import logging
 
 from   fastapi             import HTTPException
 from   typing              import List
-from   starlette.status    import HTTP_200_OK
+from   google.cloud        import datastore
+from   starlette.status    import HTTP_200_OK, \
+                                  HTTP_500_INTERNAL_SERVER_ERROR
+
+
+CACHE_VALIDITY = 3600
 
 
 class Statuses(dict):
@@ -38,8 +44,31 @@ class Statuses(dict):
 
 class TelegramClient:
     def __init__(self):
+        self.db_client       = datastore.Client(project = 'project-atlas-tools')
         self.tg_bot_token    = os.environ.get('TG_BOT_TOKEN')
         self.tg_api_base_url = 'https://api.telegram.org/bot'
+
+    def set_user_status(self, user_id, user_status: int):
+        ds_key    = self.db_client.key('tg_user_status', user_id)
+        ds_entity = datastore.Entity(key = ds_key)
+        ds_entity['fill_date'] = time.time()
+        ds_entity['fill_data'] = user_status
+
+        try:
+            self.db_client.put(ds_entity)
+        except:
+            logging.error('[TG] - Error while saving user status')
+            raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
+
+    def get_user_status(self, user_id: int):
+        ds_key    = self.db_client.key('tg_user_status', user_id)
+        try:
+            ds_entity = self.db_client.get(key = ds_key)
+        except:
+            logging.error('[TG] - Error while retrieving user status')
+            raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
+
+        return ds_entity['fill_data'] if time.time() - ds_entity['fill_date'] < CACHE_VALIDITY else -1
 
     def send_message(
             self,

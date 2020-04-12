@@ -50,8 +50,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                       chat_id, action, message)
         raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
 
-    tg_cache_key = 'tg://status/' + str(chat_id)
-    user_status  = request.state.cache[tg_cache_key] if tg_cache_key in request.state.cache else -1
+    user_status  = request.state.telegram.get_user_status(chat_id)
 
     if action:
         logging.info('[TG] - Command received: %s', action)
@@ -61,7 +60,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 dest_message = Statuses.Help['message']
             )
             # clearing user status code [-1]
-            request.state.cache[tg_cache_key] = -1
+            request.state.telegram.set_user_status(chat_id, -1)
         elif action in Statuses.NewRequest['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
@@ -78,21 +77,21 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 ]
             )
             # clearing user status code [-1]
-            request.state.cache[tg_cache_key] = -1
+            request.state.telegram.set_user_status(chat_id, -1)
         elif action in Statuses.SrcMovie['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
                 dest_message = Statuses.SrcMovie['message']
             )
             # updating user status code
-            request.state.cache[tg_cache_key] = Statuses.SrcMovie['code']
+            request.state.telegram.set_user_status(chat_id, Statuses.SrcMovie['code'])
         elif action in Statuses.SrcShow['commands']:
             request.state.telegram.send_message(
                 dest_chat_id = chat_id,
                 dest_message = Statuses.SrcShow['message']
             )
             # updating user status code
-            request.state.cache[tg_cache_key] = Statuses.SrcShow['code']
+            request.state.telegram.set_user_status(chat_id, Statuses.SrcShow['code'])
         else:
             logging.warning('[TG] - Unexpected, unimplemented command received: %s', action)
             request.state.telegram.send_message(
@@ -100,7 +99,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 dest_message = Statuses.Help['message']
             )
             # clearing user status code [-1]
-            request.state.cache[tg_cache_key] = -1
+            request.state.telegram.set_user_status(chat_id, -1)
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # generic message received, we need to retrieve user status
@@ -120,7 +119,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     dest_message = 'Perfetto, registro subito la tua richiesta'
                 )
                 # clearing user status code [-1]
-                request.state.cache[tg_cache_key] = -1
+                request.state.telegram.set_user_status(chat_id, -1)
                 return Response(status_code = HTTP_204_NO_CONTENT)
 
             if message == 'online://not-found':
@@ -141,7 +140,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     dest_message = 'Ottimo, allora ti auguro una buona visione\\!'
                 )
                 # clearing user status code [-1]
-                request.state.cache[tg_cache_key] = -1
+                request.state.telegram.set_user_status(chat_id, -1)
                 return Response(status_code = HTTP_204_NO_CONTENT)
 
             online_results = []
