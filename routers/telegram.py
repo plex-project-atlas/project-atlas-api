@@ -50,7 +50,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                       chat_id, action, message)
         raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
 
-    tg_cache_key = 'tg://status/' + chat_id
+    tg_cache_key = 'tg://status/' + str(chat_id)
     user_status  = request.state.cache[tg_cache_key] if tg_cache_key in request.state.cache else -1
 
     if action:
