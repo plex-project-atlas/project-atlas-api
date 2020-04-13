@@ -2,20 +2,21 @@ import time
 import logging
 import uvicorn
 
-from fastapi            import FastAPI, Depends
-from routers            import match, search, telegram, requests
-from libs.plex          import PlexClient
-from libs.imdb          import IMDBClient
-from libs.tmdb          import TMDBClient
-from libs.tvdb          import TVDBClient
-from libs.telegram      import TelegramClient
-from libs.requests      import RequestsClient
-from libs.models        import env_vars_check
-from starlette.requests import Request
-from starlette.status   import HTTP_200_OK, \
-                               HTTP_204_NO_CONTENT, \
-                               HTTP_404_NOT_FOUND, \
-                               HTTP_503_SERVICE_UNAVAILABLE
+from fastapi                 import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from routers                 import match, search, telegram, requests
+from libs.plex               import PlexClient
+from libs.imdb               import IMDBClient
+from libs.tmdb               import TMDBClient
+from libs.tvdb               import TVDBClient
+from libs.telegram           import TelegramClient
+from libs.requests           import RequestsClient
+from libs.models             import env_vars_check
+from starlette.requests      import Request
+from starlette.status        import HTTP_200_OK, \
+                                    HTTP_204_NO_CONTENT, \
+                                    HTTP_404_NOT_FOUND, \
+                                    HTTP_503_SERVICE_UNAVAILABLE
 
 
 cache   = {}
@@ -47,6 +48,15 @@ def instantiate_clients():
     clients['tvdb']     = TVDBClient()
     clients['telegram'] = TelegramClient()
     clients['requests'] = RequestsClient()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials = True,
+    allow_origins     = ['http://localhost:4200'],
+    allow_methods     = ["*"],
+    allow_headers     = ["*"],
+)
 
 
 @app.middleware('http')
