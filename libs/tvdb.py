@@ -80,36 +80,33 @@ class TVDBClient:
             } for elem in resp_obj]
         }
 
-    async def get_media_by_id(self, media_ids: List[dict], media_cache: dict, media_lang: str = 'it'):
-        async def get_worker(client: httpx.AsyncClient, media_id, media_type: str, media_source: str = None):
-            cache_key = 'tvdb://' + media_type + '/' + media_id
-            if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
-                logging.info('[TVDb] - Cache hit for key: %s', cache_key)
-                return media_cache[cache_key]['fill_data']
+    async def get_media_by_id(self, media_ids: List[str], media_cache: dict, media_lang: str = 'it'):
+        async def get_worker(client: httpx.AsyncClient, media_id):
+            media_type   = media_id.split('/')[-2]
+            media_source = media_id.split('://')[0]
+
+            if media_id in media_cache and time.time() - media_cache[media_id]['fill_date'] < CACHE_VALIDITY:
+                logging.info('[TVDb] - Cache hit for key: %s', media_id.split('://')[1])
+                return media_cache[media_id]['fill_data']
 
             params = None
             self.api_headers['Accept-Language'] = media_lang
-            if media_source:
+            if not media_source == 'tvdb':
                 api_endpoint = '/search/series'
-                params = { media_source + 'Id': media_id }
+                params = { media_source + 'Id': media_id.split('/')[-1] }
             else:
-                api_endpoint = '/' + ('movies' if media_type == 'movie' else 'series') + '/' + media_id
+                api_endpoint = '/' + ('movies' if media_type == 'movie' else 'series') + '/' + media_id.split('/')[-1]
             logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(
                 url = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
             media_search = self.__get_show_details_from_json(media_id, response)
-            media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': media_search }
+            media_cache[media_id] = { 'fill_date': time.time(), 'fill_data': media_search }
 
             return media_search
 
         httpx_client = httpx.AsyncClient()
-        requests     = [get_worker(
-            httpx_client,
-            media_id['id'],
-            media_id['type'],
-            media_id['source'] if 'source' in media_id else None
-        ) for media_id in media_ids]
+        requests     = [get_worker(httpx_client, media_id) for media_id in media_ids]
         responses    = await asyncio.gather(*requests)
         return responses
 
@@ -133,7 +130,7 @@ class TVDBClient:
             response = await client.get(
                 url  = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
-            media_search = self.__get_show_details_from_json(media_title, response)
+            media_search = self.__get_show_details_from_json(cache_key, response)
 
             media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': [] }
             for media_info in media_search['results']:

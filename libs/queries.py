@@ -75,6 +75,20 @@ IMDB_SHOW_QUERY  = '''
 
 REQ_LIST_QUERY = '''
     SELECT
+        MIN(request_date) AS request_date,
+        request_id,
+        request_type,
+        request_season,
+        request_status,
+        MIN(plex_notes) AS plex_notes,
+        COUNT(*) AS request_count
+    FROM project_atlas.plex_user_requests AS request_data
+    GROUP BY request_id, request_type, request_season, request_status
+    ORDER BY request_count DESC, request_date ASC
+'''
+
+REQ_BY_ID_QUERY = '''
+    SELECT
         request_id,
         request_type,
         request_season,
@@ -87,6 +101,7 @@ REQ_LIST_QUERY = '''
         FROM project_atlas.plex_user_requests
         ORDER BY request_date
     ) AS request_data
+    WHERE request_id = '%REQ_ID%'
     GROUP BY request_id, request_type, request_season, request_status
     ORDER BY request_count DESC, MIN(request_date) ASC
 '''

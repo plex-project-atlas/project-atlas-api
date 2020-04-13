@@ -66,35 +66,32 @@ class TMDBClient:
             } for elem in resp_obj]
         }
 
-    async def get_media_by_id(self, media_ids: List[dict], media_cache: dict, media_lang: str = 'it-IT'):
-        async def get_worker(client: httpx.AsyncClient, media_id, media_type: str, media_source: str = None):
-            cache_key = 'tmdb://' + media_type + '/' + media_id
-            if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
-                logging.info('[TMDb] - Cache hit for key: %s', cache_key)
-                return media_cache[cache_key]['fill_data']
+    async def get_media_by_id(self, media_ids: List[str], media_cache: dict, media_lang: str = 'it-IT'):
+        async def get_worker(client: httpx.AsyncClient, media_id):
+            media_type   = media_id.split('/')[-2]
+            media_source = media_id.split('://')[0]
+
+            if media_id in media_cache and time.time() - media_cache[media_id]['fill_date'] < CACHE_VALIDITY:
+                logging.info('[TMDb] - Cache hit for key: %s', media_id.split('://')[1])
+                return media_cache[media_id]['fill_data']
 
             params = { 'language': media_lang }
-            if media_source:
-                api_endpoint = '/find/' + media_id
+            if not media_source == 'tmdb':
+                api_endpoint = '/find/' + media_id.split('/')[-1]
                 params['external_source'] = media_source + '_id'
             else:
-                api_endpoint = '/' + ('tv' if media_type == 'show' else media_type) + '/' + media_id
+                api_endpoint = '/' + ('tv' if media_type == 'show' else media_type) + '/' + media_id.split('/')[-1]
             logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(
                 url  = TMDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
             media_search = self.__get_show_details_from_json(media_id, response)
-            media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': media_search }
+            media_cache[media_id] = { 'fill_date': time.time(), 'fill_data': media_search }
 
             return media_search
 
         httpx_client = httpx.AsyncClient()
-        requests     = [get_worker(
-            httpx_client,
-            media_id['id'],
-            media_id['type'],
-            media_id['source'] if 'source' in media_id else None
-        ) for media_id in media_ids]
+        requests     = [get_worker(httpx_client, media_id) for media_id in media_ids]
         responses    = await asyncio.gather(*requests)
         return responses
 
@@ -117,7 +114,7 @@ class TMDBClient:
             response = await client.get(
                 url  = TMDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
-            media_search = self.__get_show_details_from_json(media_title, response)
+            media_search = self.__get_show_details_from_json(cache_key, response)
             if page == 1 and media_search['total_pages'] > 1:
                 media_search_pages = [search_worker(
                     client, media_title, media_type, media_page)

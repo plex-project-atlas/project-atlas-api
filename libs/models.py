@@ -87,6 +87,10 @@ class TMDbMatchRequest(BaseModel):
     external:       str = None
 
 
+class RequestPayload(BaseModel):
+    request_id:      str
+
+
 class RequestDetails(BaseModel):
     request_date:    str
     user_id:         int
@@ -96,7 +100,18 @@ class RequestDetails(BaseModel):
     request_notes:   str = None
 
 
-class RequestObject(BaseModel):
+class RequestListObject(BaseModel):
+    request_date:    str
+    request_id:      str
+    request_type:    str
+    request_season:  int = None
+    request_status:  str
+    plex_notes:      str = None
+    request_count:   int
+    request_info:    ResultObject
+
+
+class RequestMediaObject(BaseModel):
     request_id:      str
     request_type:    str
     request_season:  int = None

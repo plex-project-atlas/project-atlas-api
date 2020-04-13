@@ -53,21 +53,11 @@ async def match_id(
     - The returned object will contain _service.results.seasons_ only if _media_type_ is _show_
     """
     if media_db == 'imdb':
-        media_info = await request.state.tmdb.get_media_by_id([{
-            'id':     media_id,
-            'type':   media_type,
-            'source': media_db
-        }], request.state.cache)
+        media_info = await request.state.tmdb.get_media_by_id([media_db + '://' + media_type + '/' + media_id], request.state.cache)
     elif media_db == 'tmdb':
-        media_info = await request.state.tmdb.get_media_by_id([{
-            'id':   media_id,
-            'type': media_type
-        }], request.state.cache)
+        media_info = await request.state.tmdb.get_media_by_id([media_db + '://' + media_type + '/' + media_id], request.state.cache)
     elif media_db == 'tvdb':
-        media_info = await request.state.tvdb.get_media_by_id([{
-            'id':   media_id,
-            'type': media_type
-        }], request.state.cache)
+        media_info = await request.state.tvdb.get_media_by_id([media_db + '://' + media_type + '/' + media_id], request.state.cache)
     else:
         raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED, detail = 'Not Implemented')
 
