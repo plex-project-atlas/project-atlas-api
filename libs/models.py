@@ -103,5 +103,5 @@ class RequestObject(BaseModel):
     request_status:  str
     plex_notes:      str = None
     request_count:   int
-    request_info:    ResultObject = None
+    request_info:    ResultObject
     request_list:    List[RequestDetails]
