@@ -1,4 +1,4 @@
-import re
+import emoji
 import logging
 
 from   fastapi             import APIRouter, Body, Request, Response, HTTPException
@@ -84,10 +84,10 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         if user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
             action = '/help'
         # specific plex id received, media is already present and there's not need for a new request
-        elif message.startswith('plex') and not message.startswith('plex://not-found'):
+        elif message.startswith('plex') and 'not-found' not in message:
             action = 'plex://found'
         # media found online, registering request
-        elif message.startswith(('imdb', 'tmdb', 'tvdb')):
+        elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' not in message:
             action = 'online://found'
         # media not found online, repeating request
         elif message.startswith('online://not-found'):
@@ -122,10 +122,11 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 'plex://search/' + search_title if plex_results else
                 ( ('tmdb://' if media_type == 'movie' else 'tvdb://') + media_type + '/search/' + search_title),
                 [ {
-                    'text': '🎥 {title} ({year})'.format(
+                    'text': emoji.emojize( '{icon} {title} ({year})'.format(
                         title = result['title'],
-                        year  = (result['year'] if result['year'] else 'N/D')
-                    ),
+                        year  = (result['year'] if result['year'] else 'N/D'),
+                        icon  = ':movie camera:' if media_type == 'movie' else ':clapper_board:'
+                    ) ),
                     'link': result['guid']
                 } for result in (plex_results if plex_results else online_results) ]
             )
