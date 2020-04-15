@@ -95,7 +95,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         # no direct exit case, proceeding with media search
         elif user_status in [ request.state.telegram.tg_action_tree[key]['status_code']
                               for key in request.state.telegram.tg_action_tree if key in ['/srcMovie', '/srcShow'] ]:
-            search_title, plex_results, online_results = None, None, None
+            search_title, plex_results, online_results = '', [], []
             media_type = 'movie' if user_status == request.state.telegram.tg_action_tree['/srcMovie']['status_code'] else 'show'
             # skip plex search if already done
             if not message.startswith('plex://not-found'):
