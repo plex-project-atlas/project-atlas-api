@@ -6,6 +6,7 @@ import httpx
 import asyncio
 import logging
 
+from   fastapi          import HTTPException
 from   typing           import Optional, List
 from   starlette.status import HTTP_200_OK
 
@@ -60,7 +61,17 @@ class TVDBClient:
     @staticmethod
     def __get_show_details_from_json(query: str, response: httpx.Response):
         if response.status_code != HTTP_200_OK:
-            return None
+            message = None
+            try:
+                message = response.json()
+                message = message['Error'] if 'Error' in message else ''
+                logging.error('[TVDb] - Error retrieving results, received: %s', message)
+            except:
+                pass
+            raise HTTPException(
+                status_code = response.status_code,
+                detail      = message if message else response.request.url
+            )
 
         try:
             resp_obj = response.json()
@@ -126,10 +137,10 @@ class TVDBClient:
             api_endpoint = '/search' + ('/series' if media_type == 'show' else '')
             params       = { 'name': media_title }
             self.api_headers['Accept-Language'] = media_lang
-            logging.info('[TVDb] - Calling API endpoint: %s', TVDBClient.api_url + api_endpoint)
             response = await client.get(
                 url  = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
+            logging.info('[TMDb] - API endpoint was called: %s', response.request.url)
             media_search = self.__get_show_details_from_json(cache_key, response)
 
             media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': [] }

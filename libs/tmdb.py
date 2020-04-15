@@ -5,6 +5,7 @@ import httpx
 import asyncio
 import logging
 
+from   fastapi          import HTTPException
 from   typing           import List
 from   starlette.status import HTTP_200_OK
 
@@ -35,7 +36,17 @@ class TMDBClient:
 
     def __get_show_details_from_json(self, query: str, response: httpx.Response):
         if response.status_code != HTTP_200_OK:
-            return None
+            message = None
+            try:
+                message = response.json()
+                message = '. '.join(message['errors']) if 'errors' in message else ''
+                logging.error('[TMDb] - Error retrieving results, received: %s', message)
+            except:
+                pass
+            raise HTTPException(
+                status_code = response.status_code,
+                detail      = message if message else response.request.url
+            )
 
         try:
             resp_obj = response.json()
@@ -110,10 +121,10 @@ class TMDBClient:
 
             api_endpoint = '/search/' + ('tv' if media_type == 'show' else media_type)
             params       = { 'language': media_lang, 'query': media_title, 'page': page }
-            logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(
                 url  = TMDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
+            logging.info('[TMDb] - API endpoint was called: %s', response.request.url)
             media_search = self.__get_show_details_from_json(cache_key, response)
             if page == 1 and media_search['total_pages'] > 1:
                 media_search_pages = [search_worker(

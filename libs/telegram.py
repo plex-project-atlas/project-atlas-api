@@ -116,12 +116,12 @@ class TelegramClient:
             }
 
         tg_api_endpoint = '/answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
-        logging.info('[TG] - Calling API endpoint: %s', self.tg_api_base_url + tg_api_endpoint)
         send_response   = httpx.post(
             self.tg_api_base_url + self.tg_bot_token + tg_api_endpoint,
             json    = response,
             headers = headers
         )
+        logging.info('[TG] - API endpoint was called: %s', self.tg_api_base_url + tg_api_endpoint)
         if send_response.status_code != HTTP_200_OK:
             error_message = None
             try:
@@ -137,7 +137,10 @@ class TelegramClient:
 
     @staticmethod
     def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[ List[dict] ]:
-        elements.append({'text': 'Nessuno di questi', 'link': search_key.split('://')[0] + '://not-found'})
+        elements.append({
+            'text': 'Nessuno di questi',
+            'link': search_key.split('://')[0] + '://not-found/' + search_key.split('/')[-1]
+        })
         last_page = math.ceil(len(elements) / page_size)
         prev_page  = page - 2
         next_page  = page + 2

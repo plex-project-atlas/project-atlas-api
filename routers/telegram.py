@@ -107,7 +107,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 plex_results = plex_results[0]['results'] if plex_results and plex_results[0]['results'] else []
             elif not plex_results:
                 action       = 'online://results'
-                search_title = message.replace('not-found://plex/', '')
+                search_title = message.replace('plex://not-found', '')
                 media_search = request.state.tmdb.search_media_by_name \
                                if user_status == request.state.telegram.tg_action_tree['/srcMovie']['status_code'] else \
                                request.state.tvdb.search_media_by_name
@@ -119,7 +119,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 online_results = online_results[0]['results'] if online_results or not online_results[0]['results'] else []
 
             choices = request.state.telegram.build_paginated_choices(
-                'plex://search/' + search_title if plex_results else
+                'plex://' + media_type + 'search/' + search_title if plex_results else
                 ( ('tmdb://' if media_type == 'movie' else 'tvdb://') + media_type + '/search/' + search_title),
                 [ {
                     'text': emoji.emojize( '{icon} {title} ({year})'.format(
