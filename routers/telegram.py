@@ -73,7 +73,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # generic message received, we need to retrieve user status
-    user_status  = request.state.telegram.get_user_status(chat_id)
+    user_status  = 100  #request.state.telegram.get_user_status(chat_id)
     if message:
         logging.info('[TG] - Message received: %s', message)
         logging.info('[TG] - Status for user %s: %s', chat_id, user_status)
@@ -92,6 +92,9 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         # media not found online, repeating request
         elif message.startswith('online://not-found'):
             action = 'online://not-found'
+        # user has not yet choose between movie and show
+        elif user_status == request.state.telegram.tg_action_tree['/newRequest']['status_code']:
+            action = '/newRequest'
         # no direct exit case, proceeding with media search
         elif user_status in [ request.state.telegram.tg_action_tree[key]['status_code']
                               for key in request.state.telegram.tg_action_tree if key in ['/srcMovie', '/srcShow'] ]:
@@ -132,6 +135,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             )
         else:
             logging.warning( '[TG] - User status code not yet implemented: %s', str(user_status) )
+            action = '/help'
 
         request.state.telegram.send_message(
             dest_chat_id = chat_id,
