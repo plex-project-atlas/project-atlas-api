@@ -137,6 +137,10 @@ class TelegramClient:
 
     @staticmethod
     def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[ List[dict] ]:
+        result = []
+        if not elements:
+            return result
+
         elements.append({
             'text': 'Nessuno di questi',
             'link': search_key.split('://')[0] + '://not-found/' + search_key.split('/')[-1]
@@ -151,7 +155,6 @@ class TelegramClient:
             next_page = last_page
             prev_page = last_page - 4 if last_page - 4 >= 1 else 1
 
-        result = []
         for element in elements[(page - 1) * page_size:page * page_size]:
             result.append([{'text': element['text'], 'callback_data': element['link']}])
 
