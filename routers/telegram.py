@@ -116,7 +116,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     dest_message = 'Ottimo, faccio subito una ricerca online'
                 )
                 online_results = await media_search([{'title': search_title, 'type':  media_type}], request.state.cache)
-                online_results = online_results[0]['results'] if online_results or not online_results[0]['results'] else []
+                online_results = online_results[0]['results'] if online_results and online_results[0]['results'] else []
 
             choices = request.state.telegram.build_paginated_choices(
                 'plex://' + media_type + 'search/' + search_title if plex_results else
