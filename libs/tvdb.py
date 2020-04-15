@@ -112,7 +112,7 @@ class TVDBClient:
 
     async def search_media_by_name(self, media_titles: List[dict], media_cache: dict, media_lang: str = 'it'):
         async def search_worker(client: httpx.AsyncClient, media_title, media_type: str):
-            cache_key = 'tvdb://search/' + re.sub(r'\W', '_', media_title)
+            cache_key = 'tvdb://search/' + media_type + '/' + re.sub(r'\W', '_', media_title)
             if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
                 logging.info('[TVDb] - Cache hit for key: %s', cache_key)
                 return {

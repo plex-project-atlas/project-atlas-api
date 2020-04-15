@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import httpx
 import logging
@@ -13,36 +14,54 @@ from   starlette.status    import HTTP_200_OK, \
 CACHE_VALIDITY = 3600
 
 
-class Statuses(dict):
-    Help = {
-        'code':     -1,
-        'commands': ['/start', '/help'],
-        'message':  'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
-                    'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare ' + \
-                    'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
-                    'Questa è la lista di tutte le cose che posso fare:\n\n' + \
-                    '/help \\- Ti riporta a questo menù\n' + \
-                    '/newRequest \\- Richiedi una nuova aggiunta a Plex\n' + \
-                    '/myRequests \\- Accedi alla lista delle tue richieste'
+class TelegramClient:
+    tg_action_tree = {}
+
+    tg_action_tree['/start'] = {
+        'status_code': -1,
+        'message': 'Ciao sono _*Plexa*_, la tua assistente virtuale 😊\n\n' + \
+                   'Sono qui per aiutarti a gestire le tue richieste, che contribuiscono a migliorare ' + \
+                   'l\'esperienza di Plex per tutti gli utenti\\.\n\n' + \
+                   'Questa è la lista di tutte le cose che posso fare:\n\n' + \
+                   '/help \\- Ti riporta a questo menù\n' + \
+                   '/newRequest \\- Richiedi una nuova aggiunta a Plex\n' + \
+                   '/myRequests \\- Accedi alla lista delle tue richieste'
     }
-    NewRequest = {
-        'code':     100,
-        'commands': ['/newRequest'],
-        'message':  'Stai cercando un Film o una Serie TV\\?'
+    tg_action_tree['/help'] = tg_action_tree['/start']
+    tg_action_tree['/newRequest'] = {
+        'status_code': 100,
+        'message': 'Stai cercando un Film o una Serie TV\\?',
+        'choices': [
+            [{"text": 'Un Film', "callback_data": '/srcMovie'}],
+            [{"text": 'Una Serie TV', "callback_data": '/srcShow'}]
+        ]
     }
-    SrcMovie = {
-        'code':     110,
-        'commands': ['/srcMovie'],
-        'message':  'Vai, spara il titolo\\!'
-    }
-    SrcShow = {
-        'code':     120,
-        'commands': ['/srcShow'],
+    tg_action_tree['/srcMovie'] = {
+        'status_code': 110,
         'message': 'Vai, spara il titolo\\!'
     }
+    tg_action_tree['/srcShow'] = {
+        'status_code': 120,
+        'message': 'Vai, spara il titolo\\!'
+    }
+    tg_action_tree['plex://found'] = {
+        'status_code': -1,
+        'message': 'Ottimo, allora ti auguro una buona visione\\!'
+    }
+    tg_action_tree['online://found'] = {
+        'status_code': -1,
+        'message': 'Perfetto, registro subito la tua richiesta'
+    }
+    tg_action_tree['online://not-found'] = {
+        'message': 'Mi dispiace, prova a ridirmi il titolo'
+    }
+    tg_action_tree['plex://results'] = {
+        'message': 'Ho trovato questi titoli nella libreria di Plex, è per caso uno di loro?'
+    }
+    tg_action_tree['online://results'] = {
+        'message': 'Ho trovato questi titoli online, dimmi quale ti interessa:'
+    }
 
-
-class TelegramClient:
     def __init__(self):
         self.db_client       = datastore.Client(project = 'project-atlas-tools')
         self.tg_bot_token    = os.environ.get('TG_BOT_TOKEN')
@@ -115,3 +134,50 @@ class TelegramClient:
                 status_code = send_response.status_code,
                 detail = error_message['description'] if error_message else response
             )
+
+    @staticmethod
+    def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[List[dict]]:
+        elements.append({'text': 'Nessuno di questi', 'link': 'online://not-found'})
+        last_page = math.ceil(len(elements) / page_size)
+        prev_page  = page - 2
+        next_page  = page + 2
+        if prev_page < 1:
+            prev_page = 1
+            next_page = 4
+        if next_page > last_page:
+            next_page = last_page
+            prev_page = last_page - 4 if last_page - 4 >= 1 else 1
+
+        result = []
+        for element in elements[(page - 1) * page_size + 1:page * page_size + 1]:
+            result.append([{'text': element['text'], 'callback_data': element['link']}])
+
+        navigator = []
+        if last_page <= 5:
+            for i in range(1, last_page + 1):
+                navigator.append({
+                    'text': '· {} ·'.format( str(i) ) if i == page else
+                              '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
+                    'callback_data': search_key + '/p' + (str(page) if not i == page else '0')
+                })
+            result.append(navigator)
+        else:
+            if 1 not in range(prev_page, next_page + 1):
+                navigator.append({
+                    'text': '|< 1',
+                    'callback_data': search_key + '/p1'
+                })
+            for i in range(prev_page, next_page + 1):
+                navigator.append({
+                    'text': '· {} ·'.format( str(i) ) if i == page else
+                              '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
+                    'callback_data': search_key + '/p' + (str(i) if not i == page else '0')
+                })
+            if last_page not in range(prev_page, next_page + 1):
+                navigator.append({
+                    'text': '{} >|'.format(str(last_page)),
+                    'callback_data': search_key + '/p' + str(last_page)
+                })
+            result.append(navigator)
+
+        return result

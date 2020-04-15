@@ -1,8 +1,8 @@
+import re
 import logging
 
 from   fastapi             import APIRouter, Body, Request, Response, HTTPException
-from   typing              import Any
-from   libs.telegram       import Statuses
+from   typing              import Any, List
 from   starlette.status    import HTTP_204_NO_CONTENT, \
                                   HTTP_500_INTERNAL_SERVER_ERROR, \
                                   HTTP_501_NOT_IMPLEMENTED
@@ -18,6 +18,14 @@ router          = APIRouter()
     response_model = None
 )
 async def plexa_answer( request: Request, payload: Any = Body(...) ):
+    def send_and_register(status: int, msg_text: str, msg_choices: List[ List[dict] ] = None):
+        request.state.telegram.send_message(
+            dest_chat_id = chat_id,
+            dest_message = msg_text,
+            choices      = msg_choices if msg_choices else None
+        )
+        request.state.telegram.set_user_status(chat_id, status)
+
     logging.info('[TG] - Update received: %s', payload)
     if not any(update in payload for update in ['message', 'callback_query']):
         logging.error('[TG] - Unexpected, unimplemented update received')
@@ -50,146 +58,88 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                       chat_id, action, message)
         raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
 
-    user_status  = request.state.telegram.get_user_status(chat_id)
-
     if action:
         logging.info('[TG] - Command received: %s', action)
-        if action in Statuses.Help['commands']:
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                dest_message = Statuses.Help['message']
-            )
-            # clearing user status code [-1]
-            request.state.telegram.set_user_status(chat_id, -1)
-        elif action in Statuses.NewRequest['commands']:
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                dest_message = Statuses.NewRequest['message'],
-                choices      = [
-                    [{
-                        "text": 'Un Film',
-                        "callback_data": Statuses.SrcMovie['commands'][0]
-                    }],
-                    [{
-                        "text": 'Una Serie TV',
-                        "callback_data": Statuses.SrcShow['commands'][0]
-                    }]
-                ]
-            )
-            # clearing user status code [-1]
-            request.state.telegram.set_user_status(chat_id, -1)
-        elif action in Statuses.SrcMovie['commands']:
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                dest_message = Statuses.SrcMovie['message']
-            )
-            # updating user status code
-            request.state.telegram.set_user_status(chat_id, Statuses.SrcMovie['code'])
-        elif action in Statuses.SrcShow['commands']:
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                dest_message = Statuses.SrcShow['message']
-            )
-            # updating user status code
-            request.state.telegram.set_user_status(chat_id, Statuses.SrcShow['code'])
-        else:
-            logging.warning('[TG] - Unexpected, unimplemented command received: %s', action)
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                dest_message = Statuses.Help['message']
-            )
-            # clearing user status code [-1]
-            request.state.telegram.set_user_status(chat_id, -1)
+        if action not in request.state.telegram.tg_action_tree:
+            logging.warning('[TG] - Unexpected, no action defined for command: %s', action)
+            action = '/help'
+
+        send_and_register(
+            status      = request.state.telegram.tg_action_tree[action]['status_code'],
+            msg_text    = request.state.telegram.tg_action_tree[action]['message'],
+            msg_choices = request.state.telegram.tg_action_tree[action]['choices']
+                          if 'choices' in request.state.telegram.tg_action_tree[action] else None
+        )
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # generic message received, we need to retrieve user status
+    user_status  = request.state.telegram.get_user_status(chat_id)
     if message:
         logging.info('[TG] - Message received: %s', message)
         logging.info('[TG] - Status for user %s: %s', chat_id, user_status)
 
-        if user_status == Statuses.Help['code']:
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                dest_message = Statuses.Help['message']
-            )
-        elif user_status in [ Statuses.SrcMovie['code'], Statuses.SrcShow['code'] ]:
-            if any(message.startswith(source) for source in ['imdb://', 'tmdb://', 'tvdb://']):
-                request.state.telegram.send_message(
-                    dest_chat_id = chat_id,
-                    dest_message = 'Perfetto, registro subito la tua richiesta'
-                )
-                # clearing user status code [-1]
-                request.state.telegram.set_user_status(chat_id, -1)
-                return Response(status_code = HTTP_204_NO_CONTENT)
+        choices = None
 
-            if message == 'online://not-found':
-                request.state.telegram.send_message(
-                    dest_chat_id = chat_id,
-                    dest_message = 'Mi dispiace, prova a ridirmi il titolo'
-                )
-                return Response(status_code = HTTP_204_NO_CONTENT)
-
-            plex_results = []
-            if not message.startswith('plex://'):
-                plex_results   = request.state.plex.search_media_by_name([message.strip()], 'movie') \
-                                 if user_status == Statuses.SrcMovie['code'] else \
-                                 request.state.plex.search_media_by_name([message.strip()], 'show')
-            elif not message.startswith('plex://not-found/'):  # need to check for show or movie
-                request.state.telegram.send_message(
-                    dest_chat_id = chat_id,
-                    dest_message = 'Ottimo, allora ti auguro una buona visione\\!'
-                )
-                # clearing user status code [-1]
-                request.state.telegram.set_user_status(chat_id, -1)
-                return Response(status_code = HTTP_204_NO_CONTENT)
-
-            online_results = []
-            if not plex_results or not plex_results[0]['results'] or message.startswith('plex://not-found/'):
+        # random message, redirect to intro
+        if user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
+            action = '/help'
+        # specific plex id received, media is already present and there's not need for a new request
+        elif message.startswith('plex') and not message.startswith('plex://not-found'):
+            action = 'plex://found'
+        # media found online, registering request
+        elif message.startswith(('imdb', 'tmdb', 'tvdb')):
+            action = 'online://found'
+        # media not found online, repeating request
+        elif message.startswith('online://not-found'):
+            action = 'online://not-found'
+        # no direct exit case, proceeding with media search
+        elif user_status in [ key['status_code'] for key in request.state.telegram.tg_action_tree if key in ['/movie', 'show'] ]:
+            search_title, plex_results, online_results = None, None, None
+            media_type = 'movie' if user_status == request.state.telegram.tg_action_tree['/srcMovie']['status_code'] else 'show'
+            # skip plex search if already done
+            if not message.startswith('plex://not-found'):
+                action       = 'plex://results'
+                search_title = message
+                plex_results = request.state.plex.search_media_by_name([message.strip()], media_type) \
+                               if media_type == 'movie' else \
+                               request.state.plex.search_media_by_name([message.strip()], media_type)
+                plex_results = plex_results[0]['results'] if plex_results and plex_results[0]['results'] else []
+            elif not plex_results:
+                action       = 'online://results'
+                search_title = message.replace('not-found://plex/', '')
+                media_search = request.state.tmdb.search_media_by_name() \
+                               if user_status == request.state.telegram.tg_action_tree['/srcMovie']['status_code'] else \
+                               request.state.tvdb.search_media_by_name()
                 request.state.telegram.send_message(
                     dest_chat_id = chat_id,
                     dest_message = 'Ottimo, faccio subito una ricerca online'
                 )
-                search_title = message.replace('plex://not-found/', '') if message.startswith('plex://not-found/') \
-                               else message
-                online_results = await request.state.tmdb.search_media_by_name([{
-                                     'title': search_title,
-                                     'type': 'movie'
-                                 }], request.state.cache) \
-                                 if user_status == Statuses.SrcMovie['code'] else \
-                                 await request.state.tvdb.search_media_by_name([{
-                                     'title': search_title,
-                                     'type': 'show'
-                                 }], request.state.cache)
-                if not online_results or not online_results[0]['results']:
-                    request.state.telegram.send_message(
-                        dest_chat_id = chat_id,
-                        dest_message = 'Mi dispiace ma non ho trovato nulla, prova a ridirmi il titolo'
-                    )
-                    return Response(status_code = HTTP_204_NO_CONTENT)
+                online_results = await media_search([{'title': search_title, 'type':  media_type}], request.state.cache)
+                online_results = online_results[0]['results'] if online_results or not online_results[0]['results'] else []
 
-            choices = [ [{
-                "text":          elem['title'] + ' (' + (elem['year'] if elem['year'] else 'N/D') + ')',
-                "callback_data": elem['guid']
-            }] for elem in (
-                plex_results[0]['results'][:5]
-                if plex_results and plex_results[0]['results'] else
-                online_results[0]['results'][:5]
-            ) ]
-            choices.append([{
-                "text":          'Nessuno di questi',
-                "callback_data": 'online://not-found'
-                                 if online_results and online_results[0]['results'] else
-                                 'plex://not-found/' + message
-            }])
-            request.state.telegram.send_message(
-                dest_chat_id = chat_id,
-                dest_message = 'Ho trovato questi titoli' +
-                               (' nella libreria di Plex, ' if plex_results and plex_results[0]['results']  else ', ') +
-                               'è per caso uno di loro?',
-                choices      = choices
+            choices = request.state.telegram.build_paginated_choices(
+                'plex://search/' + search_title if plex_results else
+                ( ('tmdb://' if media_type == 'movie' else 'tvdb://') + media_type + '/search/' + search_title),
+                [ {
+                    'text': '🎥 {title} ({year})'.format(
+                        title = result['title'],
+                        year  = (result['year'] if result['year'] else 'N/D')
+                    ),
+                    'link': result['guid']
+                } for result in (plex_results if plex_results else online_results) ]
             )
         else:
-            logging.info('[TG] - Still not implemented')
+            logging.warning( '[TG] - User status code not yet implemented: %s', str(user_status) )
+
+        request.state.telegram.send_message(
+            dest_chat_id = chat_id,
+            dest_message = request.state.telegram.tg_action_tree[action]['status_code'],
+            choices      = choices if choices else request.state.telegram.tg_action_tree[action]['choices']
+                           if 'choices' in request.state.telegram.tg_action_tree[action] else None
+        )
+        if 'status_code' in request.state.telegram.tg_action_tree[action]:
+            request.state.telegram.set_user_status(chat_id, request.state.telegram.tg_action_tree[action]['status_code'])
+
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # fallback ending

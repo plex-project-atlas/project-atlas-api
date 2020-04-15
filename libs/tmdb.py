@@ -97,11 +97,11 @@ class TMDBClient:
 
     async def search_media_by_name(self, media_titles: List[dict], media_cache: dict, media_lang: str = 'it-IT'):
         async def search_worker(client: httpx.AsyncClient, media_title, media_type: str, page: int = 1):
-            cache_key = 'tmdb://search/' + re.sub(r'\W', '_', media_title)
+            cache_key = 'tmdb://search/' + media_type + '/' + re.sub(r'\W', '_', media_title)
             if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
                 logging.info('[TMDb] - Cache hit for key: %s', cache_key)
                 return {
-                    'query': media_title,
+                    'query':   media_title,
                     'results': [
                         media_cache[media_info]['fill_data']
                         for media_info in media_cache[cache_key]['fill_data']
