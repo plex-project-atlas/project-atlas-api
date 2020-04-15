@@ -54,9 +54,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         action  = None
 
     if not chat_id or not any([action, message]):
-        logging.error('[TG] - Unable to process update data (Chat: %s, Command: %s, Message: %s)',
-                      chat_id, action, message)
-        raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
+        logging.warning('[TG] - Unable to process message data, falling back to intro')
+        message = '/help'
 
     if action:
         logging.info('[TG] - Command received: %s', action)
