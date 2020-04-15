@@ -55,7 +55,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
 
     if not chat_id or not any([action, message]):
         logging.warning('[TG] - Unable to process message data, falling back to intro')
-        message = '/help'
+        action = '/help'
 
     if action:
         logging.info('[TG] - Command received: %s', action)
