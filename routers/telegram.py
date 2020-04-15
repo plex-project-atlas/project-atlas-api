@@ -105,7 +105,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                                if media_type == 'movie' else \
                                request.state.plex.search_media_by_name([message.strip()], media_type)
                 plex_results = plex_results[0]['results'] if plex_results and plex_results[0]['results'] else []
-            elif not plex_results:
+            if not plex_results:
                 action       = 'online://results'
                 search_title = message.replace('plex://not-found', '')
                 media_search = request.state.tmdb.search_media_by_name \
