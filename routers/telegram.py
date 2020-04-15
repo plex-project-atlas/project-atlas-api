@@ -41,7 +41,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         action  = payload['callback_query']['data']
     elif 'message' in payload:
         chat_id = payload['message']['chat']['id']
-        message = payload['message']['text'].strip().lower()
+        message = payload['message']['text'].strip().lower() if 'text' in payload['message'] else ''
         if 'entities' in payload['message']:
             commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
             if len(commands) > 1:
@@ -73,7 +73,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # generic message received, we need to retrieve user status
-    user_status  = 100  #request.state.telegram.get_user_status(chat_id)
+    user_status  = request.state.telegram.get_user_status(chat_id)
     if message:
         logging.info('[TG] - Message received: %s', message)
         logging.info('[TG] - Status for user %s: %s', chat_id, user_status)
