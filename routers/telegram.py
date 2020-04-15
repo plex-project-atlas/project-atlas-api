@@ -89,7 +89,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' not in message:
             action = 'online://found'
         # media not found online, repeating request
-        elif message.startswith('online://not-found'):
+        elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' in message:
             action = 'online://not-found'
         # user has not yet choose between movie and show
         elif user_status == request.state.telegram.tg_action_tree['/newRequest']['status_code']:
