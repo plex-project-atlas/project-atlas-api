@@ -136,7 +136,7 @@ class TelegramClient:
             )
 
     @staticmethod
-    def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[List[dict]]:
+    def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[ List[dict] ]:
         elements.append({'text': 'Nessuno di questi', 'link': 'online://not-found'})
         last_page = math.ceil(len(elements) / page_size)
         prev_page  = page - 2
@@ -149,7 +149,7 @@ class TelegramClient:
             prev_page = last_page - 4 if last_page - 4 >= 1 else 1
 
         result = []
-        for element in elements[(page - 1) * page_size + 1:page * page_size + 1]:
+        for element in elements[(page - 1) * page_size:page * page_size]:
             result.append([{'text': element['text'], 'callback_data': element['link']}])
 
         navigator = []
@@ -160,7 +160,6 @@ class TelegramClient:
                               '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
                     'callback_data': search_key + '/p' + (str(page) if not i == page else '0')
                 })
-            result.append(navigator)
         else:
             if 1 not in range(prev_page, next_page + 1):
                 navigator.append({
@@ -178,6 +177,7 @@ class TelegramClient:
                     'text': '{} >|'.format(str(last_page)),
                     'callback_data': search_key + '/p' + str(last_page)
                 })
+        if len(navigator) > 1:
             result.append(navigator)
 
         return result
