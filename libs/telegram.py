@@ -184,24 +184,24 @@ class TelegramClient:
                 navigator.append({
                     'text': '· {} ·'.format( str(i) ) if i == page else
                               '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
-                    'callback_data': search_key + '/p' + (str(page) if not i == page else '0')
+                    'callback_data': search_key + '/p' + (str(i) if not page == i else '0')
                 })
         else:
             for i in range(prev_page, next_page + 1):
                 navigator.append({
                     'text': '· {} ·'.format( str(i) ) if i == page else
                               '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
-                    'callback_data': search_key + '/p' + (str(i) if not i == page else '0')
+                    'callback_data': search_key + '/p' + (str(i) if not page == i else '0')
                 })
             if 1 not in range(prev_page, next_page + 1):
                 navigator[0] = {
                     'text': '|< 1',
-                    'callback_data': search_key + '/p' + '1' if not page == 1 else '0'
+                    'callback_data': search_key + '/p' + ('1' if not page == 1 else '0')
                 }
             if last_page not in range(prev_page, next_page + 1):
                 navigator[-1] = {
                     'text': '{} >|'.format(str(last_page)),
-                    'callback_data': search_key + '/p' + str(last_page) if not page == last_page else '0'
+                    'callback_data': search_key + '/p' + (str(last_page) if not page == last_page else '0')
                 }
         if len(navigator) > 1:
             result.append(navigator)
