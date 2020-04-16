@@ -37,6 +37,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             commands = [command for command in payload['message']['entities'] if command['type'] == 'bot_command']
             if len(commands) > 1:
                 logging.warning('[TG] - Multiple bot commands received, keeping only the first one')
+            if len(commands) > 0:
                 action = payload['message']['text'][ commands[0]['offset']:commands[0]['length'] ]
 
     # forwarding consecutive actions to message handling
