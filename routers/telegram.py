@@ -28,7 +28,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     action, chat_id, message = None, None, None
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
-        #request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
+        request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
         logging.info('[TG] - Answering callback query: %s', payload['callback_query']['id'])
         chat_id = payload['callback_query']['message']['chat']['id']
         action  = payload['callback_query']['data']
@@ -66,7 +66,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # generic message received, we need to retrieve user status
-    user_status = 110 #request.state.telegram.get_user_status(chat_id)['user_status']
+    user_status = request.state.telegram.get_user_status(chat_id)['user_status']
     if message:
         logging.info('[TG] - Message received: %s', message)
         logging.info('[TG] - Status for user %s: %s', chat_id, user_status)
