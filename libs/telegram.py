@@ -167,7 +167,7 @@ class TelegramClient:
             next_page = 5
         if next_page > last_page:
             next_page = last_page
-            prev_page = last_page - 5 if last_page - 5 >= 1 else 1
+            prev_page = last_page - 4 if last_page - 4 >= 1 else 1
 
         for element in elements[(page - 1) * page_size:page * page_size]:
             result.append([{'text': element['text'], 'callback_data': element['link']}])
