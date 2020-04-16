@@ -147,7 +147,7 @@ class TelegramClient:
                 detail = result_obj['description'] if result_obj else 'Error while sending message'
             )
 
-        return result_obj['result']['message_id'] if 'result' in result_obj else None
+        return result_obj['result']['message_id'] if 'result' in result_obj and not callback_query_id else None
 
     @staticmethod
     def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[ List[dict] ]:
