@@ -28,7 +28,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
     action, chat_id, message = None, None, None
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
-        #request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
+        request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
         logging.info('[TG] - Answering callback query: %s', payload['callback_query']['id'])
         chat_id = payload['callback_query']['message']['chat']['id']
         action  = payload['callback_query']['data']
@@ -140,11 +140,11 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             choices         = choices if choices else request.state.telegram.tg_action_tree[action]['choices']
                               if 'choices' in request.state.telegram.tg_action_tree[action] else None
         )
-        if 'status_code' in request.state.telegram.tg_action_tree[action]:
-            request.state.telegram.set_user_status(
-                chat_id,
-                request.state.telegram.tg_action_tree[action]['status_code'],
-                message_id
+        request.state.telegram.set_user_status(
+            chat_id,
+            request.state.telegram.tg_action_tree[action]['status_code'] if 'status_code' in
+            request.state.telegram.tg_action_tree[action] else user_status,
+            message_id
         )
         return Response(status_code = HTTP_204_NO_CONTENT)
 
