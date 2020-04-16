@@ -8,6 +8,7 @@ from   fastapi             import HTTPException
 from   typing              import List
 from   google.cloud        import datastore
 from   starlette.status    import HTTP_200_OK, \
+                                  HTTP_400_BAD_REQUEST, \
                                   HTTP_500_INTERNAL_SERVER_ERROR
 
 
@@ -145,10 +146,12 @@ class TelegramClient:
                 logging.error('[TG] - Error sending message, received: %s', result_obj['description'])
             logging.error('[TG] - Error sending message while sending payload: %s', response)
 
-            raise HTTPException(
-                status_code = send_response.status_code,
-                detail      = result_obj['description'] if result_obj else 'Error while sending message'
-            )
+            if send_response.status_code != HTTP_400_BAD_REQUEST \
+            or (result_obj and 'message is not modified' not in result_obj['description']):
+                raise HTTPException(
+                    status_code = send_response.status_code,
+                    detail      = result_obj['description'] if result_obj else 'Error while sending message'
+                )
 
         return result_obj['result']['message_id'] if 'result' in result_obj and not callback_query_id else None
 

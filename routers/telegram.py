@@ -2,11 +2,9 @@ import re
 import emoji
 import logging
 
-from   fastapi             import APIRouter, Body, Request, Response, HTTPException
-from   typing              import Any, List
-from   starlette.status    import HTTP_204_NO_CONTENT, \
-                                  HTTP_500_INTERNAL_SERVER_ERROR, \
-                                  HTTP_501_NOT_IMPLEMENTED
+from   fastapi             import APIRouter, Body, Request, Response
+from   typing              import Any
+from   starlette.status    import HTTP_204_NO_CONTENT
 
 
 router          = APIRouter()
@@ -21,8 +19,8 @@ router          = APIRouter()
 async def plexa_answer( request: Request, payload: Any = Body(...) ):
     logging.info('[TG] - Update received: %s', payload)
     if not any(update in payload for update in ['message', 'callback_query']):
-        logging.error('[TG] - Unexpected, unimplemented update received')
-        raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED, detail = 'Not Implemented')
+        logging.warning('[TG] - Unexpected, unimplemented update received')
+        return Response(status_code = HTTP_204_NO_CONTENT)
 
     # extracting telegram's update action or message
     action, chat_id, message = None, None, None
