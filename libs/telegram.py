@@ -181,18 +181,20 @@ class TelegramClient:
                     'callback_data': search_key + '/p' + (str(page) if not i == page else '0')
                 })
         else:
-            if 1 not in range(prev_page, next_page + 1):
-                navigator.append({
-                    'text': '|< 1',
-                    'callback_data': search_key + '/p1'
-                })
             for i in range(prev_page, next_page + 1):
                 navigator.append({
                     'text': '· {} ·'.format( str(i) ) if i == page else
                               '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
                     'callback_data': search_key + '/p' + (str(i) if not i == page else '0')
                 })
+            if 1 not in range(prev_page, next_page + 1):
+                navigator = navigator[1:]
+                navigator.append({
+                    'text': '|< 1',
+                    'callback_data': search_key + '/p1'
+                })
             if last_page not in range(prev_page, next_page + 1):
+                navigator = navigator[:-1]
                 navigator.append({
                     'text': '{} >|'.format(str(last_page)),
                     'callback_data': search_key + '/p' + str(last_page)
