@@ -129,23 +129,23 @@ class TelegramClient:
         )
         logging.info('[TG] - API endpoint was called: %s', self.tg_api_base_url + tg_api_endpoint)
 
-        result = None
+        result_obj = None
         try:
-            result = send_response.json()
+            result_obj = send_response.json()
         except:
             pass
 
         if send_response.status_code != HTTP_200_OK:
-            if result:
-                logging.error('[TG] - Error sending message, received: %s', result['description'])
+            if result_obj:
+                logging.error('[TG] - Error sending message, received: %s', result_obj['description'])
             logging.error('[TG] - Error sending message while sending payload: %s', response)
 
             raise HTTPException(
                 status_code = send_response.status_code,
-                detail = result['description'] if result else 'Error while sending message'
+                detail = result_obj['description'] if result_obj else 'Error while sending message'
             )
 
-        return result['message_id']
+        return result_obj['result']['message_id'] if 'result' in result_obj else None
 
     @staticmethod
     def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[ List[dict] ]:
