@@ -59,7 +59,7 @@ class TMDBClient:
             resp_obj = resp_obj['movie_results']
         elif 'tv_results'  in resp_obj and resp_obj['tv_results']:
             resp_obj = resp_obj['tv_results']
-        elif 'results'     in resp_obj and resp_obj['results']:
+        elif 'results'     in resp_obj:
             resp_obj = resp_obj['results']
         else:
             resp_obj = [resp_obj]
