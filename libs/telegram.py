@@ -107,14 +107,16 @@ class TelegramClient:
         if callback_query_id:
             response['callback_query_id'] = callback_query_id
         else:
-            response['parse_mode'] = 'MarkdownV2'
+            response['parse_mode']   = 'MarkdownV2'
+        if edit_message_id:
+            response['message_id']   = edit_message_id
         if dest_chat_id:
-            response['chat_id'] = dest_chat_id
+            response['chat_id']      = dest_chat_id
         if img:
-            response['photo']   = img
-            response['caption'] = dest_message
+            response['photo']        = img
+            response['caption']      = dest_message
         elif not callback_query_id:
-            response['text']    = dest_message
+            response['text']         = dest_message
         if choices:
             response['reply_markup'] = {
                 'inline_keyboard': choices

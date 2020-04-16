@@ -71,7 +71,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         logging.info('[TG] - Message received: %s', message)
         logging.info('[TG] - Status for user %s: %s', chat_id, user_status)
 
-        choices, media_page = None, None
+        choices    = None
+        media_page = re.search("^(?:plex|imdb|tmdb|tvdb):\/\/(?:movie|show)\/search\/.+?\/p(\d+)$", message)
 
         # random message, redirect to intro
         if user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
@@ -80,7 +81,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         elif message.startswith('plex') and 'not-found' not in message:
             action = 'plex://found'
         # media found online, registering request
-        elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' not in message:
+        elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' not in message and not media_page:
             action = 'online://found'
         # media not found online, repeating request
         elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' in message:
@@ -92,10 +93,9 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         elif user_status in [ request.state.telegram.tg_action_tree[key]['status_code']
                               for key in request.state.telegram.tg_action_tree if key in ['/srcMovie', '/srcShow'] ]:
             search_title, plex_results, online_results = '', [], []
-            media_page = re.search("^(?:plex|imdb|tmdb|tvdb):\/\/(?:movie|show)\/search\/.+?\/p(\d+)$", message)
             media_type = 'movie' if user_status == request.state.telegram.tg_action_tree['/srcMovie']['status_code'] else 'show'
             # skip plex search if already done
-            if not message.startswith('plex://not-found') or (message.startswith('plex') and media_page):
+            if '://' not in message or (message.startswith('plex') and media_page):
                 action       = 'plex://results'
                 search_title = message if not media_page else message.split('/')[-2]
                 plex_results = request.state.plex.search_media_by_name([message.strip()], media_type) \
@@ -127,7 +127,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     ) ),
                     'link': result['guid']
                 } for result in (plex_results if plex_results else online_results) ],
-                page       = media_page.group(1) if media_page else 1
+                page       = int( media_page.group(1) ) if media_page else 1
             )
         else:
             logging.warning( '[TG] - User status code not yet implemented: %s', str(user_status) )
