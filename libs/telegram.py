@@ -147,7 +147,7 @@ class TelegramClient:
 
             raise HTTPException(
                 status_code = send_response.status_code,
-                detail = result_obj['description'] if result_obj else 'Error while sending message'
+                detail      = result_obj['description'] if result_obj else 'Error while sending message'
             )
 
         return result_obj['result']['message_id'] if 'result' in result_obj and not callback_query_id else None
@@ -193,12 +193,12 @@ class TelegramClient:
             if 1 not in range(prev_page, next_page + 1):
                 navigator[0] = {
                     'text': '|< 1',
-                    'callback_data': search_key + '/p1'
+                    'callback_data': search_key + '/p' + '1' if not page == 1 else '0'
                 }
             if last_page not in range(prev_page, next_page + 1):
                 navigator[-1] = {
                     'text': '{} >|'.format(str(last_page)),
-                    'callback_data': search_key + '/p' + str(last_page)
+                    'callback_data': search_key + '/p' + str(last_page) if not page == last_page else '0'
                 }
         if len(navigator) > 1:
             result.append(navigator)
