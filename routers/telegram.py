@@ -66,13 +66,15 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # generic message received, we need to retrieve user status
-    user_status  = request.state.telegram.get_user_status(chat_id)['user_status']
+    user_status = request.state.telegram.get_user_status(chat_id)['user_status']
     if message:
         logging.info('[TG] - Message received: %s', message)
         logging.info('[TG] - Status for user %s: %s', chat_id, user_status)
 
         choices    = None
         media_page = re.search("^(?:plex|imdb|tmdb|tvdb):\/\/(?:movie|show)\/search\/.+?\/p(\d+)$", message)
+        if media_page and int( media_page.group(1) ) == 0:
+            return Response(status_code = HTTP_204_NO_CONTENT)
 
         # random message, redirect to intro
         if user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
