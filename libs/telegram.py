@@ -67,11 +67,11 @@ class TelegramClient:
         self.tg_bot_token    = os.environ.get('TG_BOT_TOKEN')
         self.tg_api_base_url = 'https://api.telegram.org/bot'
 
-    def set_user_status(self, user_id, user_status: int):
+    def set_user_status(self, user_id, user_status: int, message_id: int = None):
         ds_key    = self.db_client.key('tg_user_status', user_id)
         ds_entity = datastore.Entity(key = ds_key)
         ds_entity['fill_date'] = time.time()
-        ds_entity['fill_data'] = user_status
+        ds_entity['fill_data'] = { 'user_status': user_status, 'last_message_id': message_id }
 
         try:
             self.db_client.put(ds_entity)
@@ -87,11 +87,16 @@ class TelegramClient:
             logging.error('[TG] - Error while retrieving user status')
             raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
 
-        return ds_entity['fill_data'] if ds_entity and time.time() - ds_entity['fill_date'] < CACHE_VALIDITY else -1
+        ds_data = ds_entity['fill_data'] if ds_entity and time.time() - ds_entity['fill_date'] < CACHE_VALIDITY else None
+        return {
+            'user_status':     ds_data['user_status']     if ds_data and 'user_status'     in ds_data else -1,
+            'last_message_id': ds_data['last_message_id'] if ds_data and 'last_message_id' in ds_data else None
+        }
 
     def send_message(
             self,
             callback_query_id:  int   = None,
+            edit_message_id:    int   = None,
             dest_chat_id:       int   = None,
             dest_message:       str   = None,
             img:                str   = None,
@@ -115,25 +120,32 @@ class TelegramClient:
                 'inline_keyboard': choices
             }
 
-        tg_api_endpoint = '/answerCallbackQuery' if callback_query_id else '/sendPhoto' if img else '/sendMessage'
+        tg_api_endpoint = '/answerCallbackQuery'    if callback_query_id else '/sendPhoto'   if img else \
+                          '/editMessageReplyMarkup' if edit_message_id   else '/sendMessage'
         send_response   = httpx.post(
             self.tg_api_base_url + self.tg_bot_token + tg_api_endpoint,
             json    = response,
             headers = headers
         )
         logging.info('[TG] - API endpoint was called: %s', self.tg_api_base_url + tg_api_endpoint)
+
+        result = None
+        try:
+            result = send_response.json()
+        except:
+            pass
+
         if send_response.status_code != HTTP_200_OK:
-            error_message = None
-            try:
-                error_message = send_response.json()
-                logging.error('[TG] - Error sending message, received: %s', error_message['description'])
-                logging.error('[TG] - While sending payload: %s', response)
-            except:
-                logging.error('[TG] - Error sending message while sending payload: %s', response)
+            if result:
+                logging.error('[TG] - Error sending message, received: %s', result['description'])
+            logging.error('[TG] - Error sending message while sending payload: %s', response)
+
             raise HTTPException(
                 status_code = send_response.status_code,
-                detail = error_message['description'] if error_message else response
+                detail = result['description'] if result else 'Error while sending message'
             )
+
+        return result['message_id']
 
     @staticmethod
     def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[ List[dict] ]:
