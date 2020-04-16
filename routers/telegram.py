@@ -117,6 +117,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     )
                 online_results = await media_search([{'title': search_title, 'type':  media_type}], request.state.cache)
                 online_results = online_results[0]['results'] if online_results and online_results[0]['results'] else []
+                if not online_results:
+                    action = 'online://not-found/direct'
 
             choices = request.state.telegram.build_paginated_choices(
                 search_key = ('plex://' if plex_results else 'tmdb://' if media_type == 'movie' else 'tvdb://') +

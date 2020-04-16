@@ -53,7 +53,10 @@ class TelegramClient:
         'message': 'Perfetto, registro subito la tua richiesta'
     }
     tg_action_tree['online://not-found'] = {
-        'message': 'Mi dispiace, prova a ridirmi il titolo'
+        'message': 'Mi dispiace, prova a dirmi di nuovo il titolo che cerchi'
+    }
+    tg_action_tree['online://not-found/direct'] = {
+        'message': 'Mi dispiace ma non ho trovato nulla, prova a ridirmi il titolo'
     }
     tg_action_tree['plex://results'] = {
         'message': 'Ho trovato questi titoli nella libreria di Plex, è per caso uno di loro?'
