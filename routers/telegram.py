@@ -71,7 +71,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         logging.info('[TG] - Message received: %s', message)
         logging.info('[TG] - Status for user %s: %s', chat_id, user_status)
 
-        choices = None
+        choices, media_page = None, None
 
         # random message, redirect to intro
         if user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
@@ -134,7 +134,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             action = '/help'
 
         message_id = request.state.telegram.send_message(
-            edit_message_id = request.state.telegram.get_user_status(chat_id)['last_message_id'] if message else None,
+            edit_message_id = request.state.telegram.get_user_status(chat_id)['last_message_id'] if media_page else None,
             dest_chat_id    = chat_id,
             dest_message    = request.state.telegram.tg_action_tree[action]['message'],
             choices         = choices if choices else request.state.telegram.tg_action_tree[action]['choices']
