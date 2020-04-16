@@ -127,7 +127,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     ) ),
                     'link': result['guid']
                 } for result in (plex_results if plex_results else online_results) ],
-                page       = media_page
+                page       = media_page.group(1) if media_page else 1
             )
         else:
             logging.warning( '[TG] - User status code not yet implemented: %s', str(user_status) )
