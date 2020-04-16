@@ -46,7 +46,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         action  = None
 
     if not chat_id or not any([action, message]) \
-    or ( message and '://' in message and not message.startswith(('imdb', 'tmdb', 'tvdb')) ):
+    or ( message and '://' in message and not message.startswith(('plex', 'imdb', 'tmdb', 'tvdb')) ):
         logging.warning('[TG] - Unable to process message data, falling back to intro')
         action = '/help'
 
