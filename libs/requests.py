@@ -36,7 +36,7 @@ class RequestsClient:
 
         return requests if not pendent_only else [ request for request in requests if request['request_status'] == 'WAIT']
 
-    def get_request(self, request_id):
+    async def get_request(self, request_id):
         query       = REQ_BY_ID_QUERY.replace('%REQ_ID%', request_id)
         query_job   = self.bq_client.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
         try:

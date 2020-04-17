@@ -100,9 +100,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             if '://' not in message or (message.startswith('plex') and media_page):
                 action       = 'plex://results'
                 search_title = message if not media_page else message.split('/')[-2]
-                plex_results = request.state.plex.search_media_by_name([message.strip()], media_type) \
-                               if media_type == 'movie' else \
-                               request.state.plex.search_media_by_name([message.strip()], media_type)
+                plex_results = request.state.plex.search_media_by_name([message.strip()], media_type, request.state.cache)
                 plex_results = plex_results[0]['results'] if plex_results and plex_results[0]['results'] else []
             if not plex_results:
                 action       = 'online://results'

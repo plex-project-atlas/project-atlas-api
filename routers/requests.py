@@ -7,7 +7,7 @@ import binascii
 from   fastapi             import APIRouter, Request, Path, Query, HTTPException
 from   typing              import List
 from   libs.models         import RequestListObject, RequestMediaObject
-from   starlette.status    import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
+from   starlette.status    import HTTP_400_BAD_REQUEST
 
 
 router          = APIRouter()
@@ -73,16 +73,13 @@ async def get_request_details(
     if not request_id.startswith(('imdb', 'tmdb', 'tvdb')):
         raise HTTPException(status_code = HTTP_400_BAD_REQUEST, detail = 'Bad Request')
 
-    request_info = request.state.requests.get_request(request_id)
-    media_info   = await request.state.tmdb.get_media_by_id([request_id], request.state.cache) \
-                   if request_id.startswith(('imdb', 'tmdb')) else \
-                   await request.state.tvdb.get_media_by_id([request_id], request.state.cache)
+    request_info   = await request.state.requests.get_request(request_id)
+    media_info     = request.state.tmdb.get_media_by_id \
+                     if request_id.startswith(('imdb', 'tmdb')) else \
+                     request.state.tvdb.get_media_by_id
+    media_info     = await media_info([request_id], request.state.cache)
 
     request_info['request_list'] = json.loads(request_info['request_list'])
     request_info['request_info'] = media_info[0]['results'][0]
-
-    if not any([ request_info['request_list'], request_info['request_info'] ]):
-        logging.error('[Requests] - Submitted ID details could be found')
-        raise HTTPException(status_code = HTTP_404_NOT_FOUND, detail = 'Not Found')
 
     return request_info

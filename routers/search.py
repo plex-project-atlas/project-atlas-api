@@ -108,7 +108,7 @@ async def match_plex(
     - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
     """
 
-    plex_results = request.state.plex.search_media_by_name(media_titles.split(','), media_type)
+    plex_results = request.state.plex.search_media_by_name(media_titles.split(','), media_type, request.state.cache)
     if not plex_results:
         raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
 

@@ -9,6 +9,7 @@ from   fastapi          import HTTPException
 from   typing           import List
 from   starlette.status import HTTP_200_OK
 
+
 CACHE_VALIDITY = 86400  # 1 day
 
 
@@ -92,10 +93,10 @@ class TMDBClient:
                 params['external_source'] = media_source + '_id'
             else:
                 api_endpoint = '/' + ('tv' if media_type == 'show' else media_type) + '/' + media_id.split('/')[-1]
-            logging.info('[TMDb] - Calling API endpoint: %s', TMDBClient.api_url + api_endpoint)
             response = await client.get(
                 url  = TMDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
             )
+            logging.info('[TMDb] - API endpoint was called: %s', response.request.url)
             media_search = self.__get_show_details_from_json(media_id, response)
             media_cache[media_id] = { 'fill_date': time.time(), 'fill_data': media_search }
 
