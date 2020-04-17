@@ -1,4 +1,5 @@
 import json
+import base64
 import asyncio
 import logging
 
@@ -49,19 +50,27 @@ async def get_requests(
     return requests
 
 
-@router.post(
-    '',
+@router.get(
+    '/{request_id}',
     summary        = 'Retrieve a single request details',
     response_model = RequestMediaObject
 )
-async def get_request_details(request: Request, request_payload: RequestPayload):
-    if not request_payload.request_id.startswith(('imdb', 'tmdb', 'tvdb')):
+async def get_request_details(
+    request: Request,
+    request_id: str = Path(
+        ...,
+        title       = 'Request ID',
+        description = 'The Base64 encoded request ID string'
+    )
+):
+    request_id = base64.b64decode(request_id).decode()
+    if not request_id.startswith(('imdb', 'tmdb', 'tvdb')):
         raise HTTPException(status_code = HTTP_400_BAD_REQUEST, detail = 'Bad Request')
 
-    request_info = request.state.requests.get_request(request_payload.request_id)
-    media_info   = await request.state.tmdb.get_media_by_id([request_payload.request_id], request.state.cache) \
-                   if request_payload.request_id.startswith(('imdb', 'tmdb')) else \
-                   await request.state.tvdb.get_media_by_id([request_payload.request_id], request.state.cache)
+    request_info = request.state.requests.get_request(request_id)
+    media_info   = await request.state.tmdb.get_media_by_id([request_id], request.state.cache) \
+                   if request_id.startswith(('imdb', 'tmdb')) else \
+                   await request.state.tvdb.get_media_by_id([request_id], request.state.cache)
 
     request_info['request_list'] = json.loads(request_info['request_list'])
     request_info['request_info'] = media_info[0]['results'][0]
