@@ -2,11 +2,12 @@ import json
 import base64
 import asyncio
 import logging
+import binascii
 
 from   fastapi             import APIRouter, Request, Path, Query, HTTPException
 from   typing              import List
-from   libs.models         import RequestPayload, RequestListObject, RequestMediaObject
-from   starlette.status    import HTTP_400_BAD_REQUEST
+from   libs.models         import RequestListObject, RequestMediaObject
+from   starlette.status    import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 
 
 router          = APIRouter()
@@ -63,7 +64,12 @@ async def get_request_details(
         description = 'The Base64 encoded request ID string'
     )
 ):
-    request_id = base64.b64decode(request_id).decode()
+    try:
+        request_id = base64.b64decode(request_id).decode()
+    except binascii.Error:
+        logging.error('[Requests] - Submitted ID is not a valid Base64 string')
+        raise HTTPException(status_code = HTTP_400_BAD_REQUEST, detail = 'Bad Request')
+
     if not request_id.startswith(('imdb', 'tmdb', 'tvdb')):
         raise HTTPException(status_code = HTTP_400_BAD_REQUEST, detail = 'Bad Request')
 
@@ -74,5 +80,9 @@ async def get_request_details(
 
     request_info['request_list'] = json.loads(request_info['request_list'])
     request_info['request_info'] = media_info[0]['results'][0]
+
+    if not any([ request_info['request_list'], request_info['request_info'] ]):
+        logging.error('[Requests] - Submitted ID details could be found')
+        raise HTTPException(status_code = HTTP_404_NOT_FOUND, detail = 'Not Found')
 
     return request_info
