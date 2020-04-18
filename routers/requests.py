@@ -4,10 +4,10 @@ import asyncio
 import logging
 import binascii
 
-from   fastapi             import APIRouter, Request, Path, Query, HTTPException
+from   fastapi             import APIRouter, Request, Path, Query, Response, HTTPException
 from   typing              import List
-from   libs.models         import RequestListObject, RequestMediaObject
-from   starlette.status    import HTTP_400_BAD_REQUEST
+from   libs.models         import RequestListObject, RequestMediaObject, RequestPayload
+from   starlette.status    import HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST
 
 
 router          = APIRouter()
@@ -49,6 +49,17 @@ async def get_requests(
             request['request_info'] = media_info[0]['results'][0]
 
     return requests
+
+
+@router.post(
+    '',
+    summary        = 'Insert a new user request',
+    response_model = None
+)
+async def insert_request(request: Request, request_payload: RequestPayload):
+    test = request_payload.dict()
+    await request.state.requests.insert_request(request_payload)
+    return Response(status_code = HTTP_204_NO_CONTENT)
 
 
 @router.get(
