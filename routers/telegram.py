@@ -2,9 +2,9 @@ import re
 import emoji
 import logging
 
-from   fastapi             import APIRouter, Body, Request, Response
+from   fastapi             import APIRouter, Body, Request, Response, HTTPException
 from   typing              import Any
-from   starlette.status    import HTTP_204_NO_CONTENT
+from   starlette.status    import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 
 
 router          = APIRouter()
@@ -100,7 +100,12 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             if '://' not in message or (message.startswith('plex') and media_page):
                 action       = 'plex://results'
                 search_title = message if not media_page else message.split('/')[-2]
-                plex_results = request.state.plex.search_media_by_name([message.strip()], media_type, request.state.cache)
+                try:
+                    plex_results = request.state.plex.search_media_by_name([message.strip()], media_type, request.state.cache)
+                except HTTPException as e:
+                    if e.status_code != HTTP_404_NOT_FOUND:
+                        raise e
+                    plex_results = []
                 plex_results = plex_results[0]['results'] if plex_results and plex_results[0]['results'] else []
             if not plex_results:
                 action       = 'online://results'
@@ -113,7 +118,12 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                         dest_chat_id = chat_id,
                         dest_message = 'Ottimo, faccio subito una ricerca online'
                     )
-                online_results = await media_search([{'title': search_title, 'type':  media_type}], request.state.cache)
+                try:
+                    online_results = await media_search([{'title': search_title, 'type':  media_type}], request.state.cache)
+                except HTTPException as e:
+                    if e.status_code != HTTP_404_NOT_FOUND:
+                        raise e
+                    online_results = []
                 online_results = online_results[0]['results'] if online_results and online_results[0]['results'] else []
                 if not online_results:
                     action = 'online://not-found/direct'
