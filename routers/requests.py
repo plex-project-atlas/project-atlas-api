@@ -6,17 +6,17 @@ import binascii
 
 from   fastapi             import APIRouter, Request, Path, Query, Response, HTTPException
 from   typing              import List
-from   libs.models         import RequestListObject, RequestMediaObject, RequestPayload
+from   libs.models         import RequestList, RequestDetails, Request as RequestModel
 from   starlette.status    import HTTP_204_NO_CONTENT, HTTP_400_BAD_REQUEST
 
 
-router          = APIRouter()
+router = APIRouter()
 
 
 @router.get(
     '',
     summary        = 'Retrieve users requests list',
-    response_model = List[RequestListObject]
+    response_model = List[RequestList]
 )
 async def get_requests(
     request: Request,
@@ -51,23 +51,12 @@ async def get_requests(
     return requests
 
 
-@router.post(
-    '',
-    summary        = 'Insert a new user request',
-    response_model = None
-)
-async def insert_request(request: Request, request_payload: RequestPayload):
-    test = request_payload.dict()
-    await request.state.requests.insert_request(request_payload)
-    return Response(status_code = HTTP_204_NO_CONTENT)
-
-
 @router.get(
     '/{request_id}',
     summary        = 'Retrieve a single request details',
-    response_model = RequestMediaObject
+    response_model = RequestDetails
 )
-async def get_request_details(
+async def get_request(
     request: Request,
     request_id: str = Path(
         ...,
@@ -94,3 +83,39 @@ async def get_request_details(
     request_info['request_info'] = media_info[0]['results'][0]
 
     return request_info
+
+
+@router.post(
+    '',
+    summary        = 'Insert a new user request',
+    response_model = None
+)
+async def insert_request(request: Request, request_payload: RequestModel):
+    result = await request.state.requests.insert_request(request_payload)
+    logging.info('[Requests] - %s rows inserted correctly', result)
+
+    return Response(status_code = HTTP_204_NO_CONTENT)
+
+
+@router.patch(
+    '',
+    summary        = 'Patch an existing user request',
+    response_model = None
+)
+async def patch_request(request: Request, request_payload: RequestModel):
+    result = await request.state.requests.patch_request(request_payload)
+    logging.info('[Requests] - %s rows patched correctly', result)
+
+    return Response(status_code = HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    '',
+    summary        = 'Delete an existing user request',
+    response_model = None
+)
+async def delete_request(request: Request, request_payload: RequestModel):
+    result = await request.state.requests.delete_request(request_payload)
+    logging.info('[Requests] - %s rows deleted correctly', result)
+
+    return Response(status_code = HTTP_204_NO_CONTENT)

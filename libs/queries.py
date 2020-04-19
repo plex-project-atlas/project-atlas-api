@@ -104,4 +104,15 @@ REQ_BY_ID_QUERY = '''
     ORDER BY request_count DESC, MIN(request_date) ASC
 '''
 
-REQ_INSERT_QUERY = 'INSERT INTO project_atlas.plex_user_requests(%FIELDS%) VALUES (%VALUES%)'
+REQ_INSERT_QUERY = 'INSERT INTO `plex-project-atlas.project_atlas.plex_user_requests`(%FIELDS%) VALUES (%VALUES%)'
+
+REQ_UPDATE_QUERY = '''
+    UPDATE `plex-project-atlas.project_atlas.plex_user_requests`
+    SET %UPDATE%
+    WHERE request_id = "%REQ_ID%"
+'''
+
+REQ_DELETE_QUERY = '''
+    DELETE FROM `plex-project-atlas.project_atlas.plex_user_requests`
+    WHERE request_id = "{request_id}" AND user_id = {user_id}
+'''

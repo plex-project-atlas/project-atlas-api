@@ -2,7 +2,7 @@ import os
 import logging
 
 from   fastapi          import HTTPException
-from   typing           import List
+from   typing           import List, Union
 from   pydantic         import BaseModel, AnyHttpUrl
 from   starlette.status import HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 
@@ -47,47 +47,41 @@ def verify_tvdb_env_variables():
     env_vars_check(required, suggested)
 
 
-class EpisodeObject(BaseModel):
+class Episode(BaseModel):
     title: str
     lang:  str
 
 
-class SeasonObject(BaseModel):
-    episodes: List[EpisodeObject]
+class Season(BaseModel):
+    episodes: List[Episode]
 
 
-class ResultObject(BaseModel):
+class Media(BaseModel):
     guid:    str
     title:   str
     type:    str
-    year:    int                = None
-    poster:  AnyHttpUrl         = None
-    seasons: List[SeasonObject] = None
+    year:    int          = None
+    poster:  AnyHttpUrl   = None
+    seasons: List[Season] = None
 
 
-class ResultAllObject(BaseModel):
-    imdb: List[ResultObject]
-    tmdb: List[ResultObject]
-    tvdb: List[ResultObject]
-
-
-class MatchResults(BaseModel):
+class Match(BaseModel):
     query:   str
-    results: List[ResultObject] = []
+    results: List[Media] = []
 
 
-class MatchAllResult(BaseModel):
+class MatchAll(BaseModel):
+    imdb: List[Media] = []
+    tmdb: List[Media] = []
+    tvdb: List[Media] = []
+
+
+class MatchList(BaseModel):
     query:   str
-    results: ResultAllObject
+    results: Union[ MatchAll, List[Media] ] = []
 
 
-class TMDbMatchRequest(BaseModel):
-    id:             str
-    type:           str
-    external:       str = None
-
-
-class RequestPayload(BaseModel):
+class Request(BaseModel):
     request_date:    str = None
     request_id:      str
     user_id:         int
@@ -100,7 +94,17 @@ class RequestPayload(BaseModel):
     plex_notes:      str = None
 
 
-class RequestDetails(BaseModel):
+class RequestList(BaseModel):
+    request_date:    str
+    request_id:      str
+    request_season:  int = None
+    request_status:  str
+    plex_notes:      str = None
+    request_count:   int
+    request_info:    Media
+
+
+class RequestUserDetails(BaseModel):
     request_date:    str
     user_id:         int
     user_name:       str
@@ -109,22 +113,12 @@ class RequestDetails(BaseModel):
     request_notes:   str = None
 
 
-class RequestListObject(BaseModel):
-    request_date:    str
-    request_id:      str
-    request_season:  int = None
-    request_status:  str
-    plex_notes:      str = None
-    request_count:   int
-    request_info:    ResultObject
-
-
-class RequestMediaObject(BaseModel):
+class RequestDetails(BaseModel):
     request_id:      str
     request_type:    str
     request_season:  int = None
     request_status:  str
     plex_notes:      str = None
     request_count:   int
-    request_info:    ResultObject
-    request_list:    List[RequestDetails]
+    request_info:    Media
+    request_list:    List[RequestUserDetails]

@@ -3,7 +3,7 @@ import asyncio
 from   fastapi             import APIRouter, Depends, Path, Query, HTTPException
 from   typing              import List
 from   libs.models         import verify_plex_env_variables, verify_tmdb_env_variables, verify_tvdb_env_variables, \
-                                  MatchAllResult, MatchResults
+                                  MatchList, Match
 from   starlette.requests  import Request
 from   starlette.status    import HTTP_501_NOT_IMPLEMENTED, \
                                   HTTP_503_SERVICE_UNAVAILABLE, \
@@ -21,7 +21,7 @@ router = APIRouter()
         Depends(verify_tmdb_env_variables),
         Depends(verify_tvdb_env_variables)
     ],
-    response_model = MatchAllResult,
+    response_model = MatchList,
     responses      = {
         HTTP_501_NOT_IMPLEMENTED: {}
     }
@@ -71,7 +71,7 @@ async def search_all(
     '/plex/{media_type}',
     summary        = 'Search into Project: Atlas Database',
     dependencies   = [Depends(verify_plex_env_variables)],
-    response_model = List[MatchResults],
+    response_model = List[Match],
     responses      = {
         HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
     }
@@ -118,7 +118,7 @@ async def match_plex(
 @router.get(
     '/imdb/{media_type}',
     summary        = 'Search into IMDb Database',
-    response_model = List[MatchResults]
+    response_model = List[Match]
 )
 async def match_imdb(
     request: Request,
@@ -159,7 +159,7 @@ async def match_imdb(
     '/tmdb/{media_type}',
     summary        = 'Search into TMDb Database',
     dependencies   = [Depends(verify_tmdb_env_variables)],
-    response_model = List[MatchResults],
+    response_model = List[Match],
     responses      = {
         HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
     }
@@ -208,7 +208,7 @@ async def search_tmdb(
     '/tvdb/{media_type}',
     summary        = 'Search into TheTVDB Database',
     dependencies   = [Depends(verify_tvdb_env_variables)],
-    response_model = List[MatchResults],
+    response_model = List[Match],
     responses      = {
         HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
     }

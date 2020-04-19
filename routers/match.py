@@ -2,7 +2,7 @@ import asyncio
 
 from   fastapi             import APIRouter, Depends, Path, HTTPException
 from   libs.models         import verify_plex_env_variables, verify_tmdb_env_variables, verify_tvdb_env_variables, \
-                                  ResultObject
+                                  Media
 from   starlette.requests  import Request
 from   starlette.status    import HTTP_404_NOT_FOUND, HTTP_501_NOT_IMPLEMENTED
 
@@ -18,7 +18,7 @@ router = APIRouter()
         Depends(verify_tmdb_env_variables),
         Depends(verify_tvdb_env_variables)
     ],
-    response_model = ResultObject
+    response_model = Media
 )
 async def match_id(
     request:    Request,
