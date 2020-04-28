@@ -186,7 +186,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     user_name       = user_name,
                     user_first_name = user_first_name,
                     user_last_name  = user_last_name,
-                    request_season  = int( media_season.group(1) ) if int( media_season.group(1) ) > 0 else -1
+                    request_season  = int( media_season.group(1) ) if media_season and int( media_season.group(1) ) > 0
+                                      else -1
                 ) )
         # media not found online, repeating request
         elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' in message:
