@@ -149,7 +149,13 @@ class TVDBClient:
 
             if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
                 logging.info('[TVDb] - Cache hit for key: %s', media_id.split('://')[1])
-                return media_cache[cache_key]['fill_data']
+                return {
+                    'query': media_id,
+                    'results': [
+                        media_cache[media_info]['fill_data']
+                        for media_info in media_cache[cache_key]['fill_data']
+                    ]
+                }
 
             params = None
             self.api_headers['Accept-Language'] = media_lang

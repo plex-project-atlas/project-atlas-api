@@ -26,7 +26,6 @@ async def get_user_request_page(request: Request, user_id: int, pendent_only = T
         )
     ]
     media_details = await asyncio.gather(*media_details)
-    logging.info('media_details: %s', media_details)
     media_details = [
         media['results'][0] for media_type in media_details for media in media_type if media['results']
     ]
