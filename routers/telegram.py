@@ -46,7 +46,7 @@ async def get_user_request_page(request: Request, user_id: int, pendent_only = T
                 season = ' - Stagione {}'.format(choice['request_season']) if choice['request_season'] > 0 else
                          ' - Speciali'   if choice['request_season'] == 0  else ''
             ) ),
-            'link': 'requests://{user_id}/'.format(user_id = user_id)
+            'link': 'requests://{user_id}'.format(user_id = user_id)
         } for choice in choices],
         page         = page,
         extra_choice = {
@@ -134,14 +134,15 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         logging.info('[TG] - Status for user %s: %s', user_id, user_status)
 
         pending_db_ops = None
-        media_page = re.search("^(?:plex|imdb|tmdb|tvdb):\/\/(?:movie|show)\/search\/.+?\/p(\d+)$", message)
+        media_page = re.search("^.+?\/p(\d+)$", message)
         if media_page and int( media_page.group(1) ) == 0:
             return Response(status_code = HTTP_204_NO_CONTENT)
         # request for user requests page
         if message.startswith('requests://') and media_page:
-            choices = await get_user_request_page( request, user_id, True,  int( media_page.group(1) ) ) \
+            action  = '/myRequests'
+            choices = await get_user_request_page( request, user_id, False,  int( media_page.group(1) ) ) \
                       if '/all/' in message else \
-                      await get_user_request_page( request, user_id, False, int( media_page.group(1) ) )
+                      await get_user_request_page( request, user_id, True, int( media_page.group(1) ) )
         # random message, redirect to intro
         elif user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
             action = '/help'
@@ -150,7 +151,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             action = 'plex://found'
         # media found online, registering request
         elif message.startswith(('imdb', 'tmdb', 'tvdb')) and 'not-found' not in message and not media_page:
-            media_season = re.search("^(?:plex|imdb|tmdb|tvdb):\/\/(?:movie|show)\/.+?\/s(\d+)$", message)
+            media_season = re.search("^.+?\/s(\d+)$", message)
             if 'show' in message and not media_season:
                 media_search = request.state.tmdb.get_media_by_id if message.startswith('tmdb') else \
                                request.state.tvdb.get_media_by_id
