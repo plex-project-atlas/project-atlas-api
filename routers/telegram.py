@@ -13,7 +13,7 @@ from   starlette.status    import HTTP_204_NO_CONTENT, HTTP_404_NOT_FOUND
 router          = APIRouter()
 
 
-def get_user_request_page(request: Request, user_id: int, pendent_only = True, page = 1):
+async def get_user_request_page(request: Request, user_id: int, pendent_only = True, page = 1):
     choices = request.state.requests.get_requests_list(pendent_only = pendent_only, user_id = user_id)
     media_details = [
         request.state.tmdb.get_media_by_id(
