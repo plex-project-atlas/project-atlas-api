@@ -116,7 +116,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             action = '/help'
 
         if action == '/myRequests':
-            choices = get_user_request_page(request, user_id)
+            choices = await get_user_request_page(request, user_id)
 
         message_id = request.state.telegram.send_message(
             dest_chat_id = user_id,
@@ -139,9 +139,9 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             return Response(status_code = HTTP_204_NO_CONTENT)
         # request for user requests page
         if message.startswith('requests://') and media_page:
-            choices = get_user_request_page( request, user_id, True,  int( media_page.group(1) ) ) \
+            choices = await get_user_request_page( request, user_id, True,  int( media_page.group(1) ) ) \
                       if '/all/' in message else \
-                      get_user_request_page( request, user_id, False, int( media_page.group(1) ) )
+                      await get_user_request_page( request, user_id, False, int( media_page.group(1) ) )
         # random message, redirect to intro
         elif user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
             action = '/help'
