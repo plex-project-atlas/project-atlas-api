@@ -49,6 +49,10 @@ class TelegramClient:
         'status_code':  200,
         'message':      'Questo è l\'elenco delle tue richieste aperte:'
     }
+    tg_action_tree['requests://all'] = {
+        'status_code':  200,
+        'message':      'Questo è l\'elenco delle tue richieste aperte:'
+    }
     tg_action_tree['plex://found'] = {
         'status_code':  -1,
         'message':      'Ottimo, allora ti auguro una buona visione\\!'

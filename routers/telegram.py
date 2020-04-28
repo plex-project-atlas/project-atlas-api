@@ -139,7 +139,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             return Response(status_code = HTTP_204_NO_CONTENT)
         # request for user requests page
         if message.startswith('requests://') and media_page:
-            action  = '/myRequests'
+            action  = '/myRequests' if '/all/' in message else 'requests://all'
             choices = await get_user_request_page( request, user_id, False,  int( media_page.group(1) ) ) \
                       if '/all/' in message else \
                       await get_user_request_page( request, user_id, True, int( media_page.group(1) ) )
