@@ -52,7 +52,7 @@ async def get_user_request_page(request: Request, user_id: int, pendent_only = T
         extra_choice = {
             'text': 'Mostra richieste chiuse',
             'link': 'requests://{user_id}/all/p1'.format(user_id = user_id)
-        } if not pendent_only else None
+        } if pendent_only else None
     )
     return choices
 
