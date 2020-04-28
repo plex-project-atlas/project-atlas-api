@@ -38,32 +38,39 @@ class TelegramClient:
         ]
     }
     tg_action_tree['/srcMovie'] = {
-        'status_code': 110,
-        'message': 'Vai, spara il titolo\\!'
+        'status_code':  110,
+        'message':      'Vai, spara il titolo\\!'
     }
     tg_action_tree['/srcShow'] = {
-        'status_code': 120,
-        'message': 'Vai, spara il titolo\\!'
+        'status_code':  120,
+        'message':      'Vai, spara il titolo\\!'
+    }
+    tg_action_tree['/myRequests'] = {
+        'status_code':  200,
+        'message':      'Questo è l\'elenco delle tue richieste aperte:'
     }
     tg_action_tree['plex://found'] = {
-        'status_code': -1,
-        'message': 'Ottimo, allora ti auguro una buona visione\\!'
+        'status_code':  -1,
+        'message':      'Ottimo, allora ti auguro una buona visione\\!'
     }
     tg_action_tree['online://found'] = {
-        'status_code': -1,
-        'message': 'Perfetto, registro subito la tua richiesta'
+        'status_code':  -1,
+        'message':      'Perfetto, registro subito la tua richiesta'
     }
     tg_action_tree['online://not-found'] = {
-        'message': 'Mi dispiace, prova a dirmi di nuovo il titolo che cerchi'
+        'message':      'Mi dispiace, prova a dirmi di nuovo il titolo che cerchi'
     }
     tg_action_tree['online://not-found/direct'] = {
-        'message': 'Mi dispiace ma non ho trovato nulla, prova a ridirmi il titolo'
+        'message':      'Mi dispiace ma non ho trovato nulla, prova a ridirmi il titolo'
     }
     tg_action_tree['plex://results'] = {
-        'message': 'Ho trovato questi titoli nella libreria di Plex, è per caso uno di loro?'
+        'message':      'Ho trovato questi titoli nella libreria di Plex, è per caso uno di loro?'
     }
     tg_action_tree['online://results'] = {
-        'message': 'Ho trovato questi titoli online, dimmi quale ti interessa:'
+        'message':      'Ho trovato questi titoli online, dimmi quale ti interessa:'
+    }
+    tg_action_tree['online://seasons'] = {
+        'message':      'Perfetto, queste sono le stagioni della serie, quale cercavi?'
     }
 
     def __init__(self):
@@ -156,15 +163,19 @@ class TelegramClient:
         return result_obj['result']['message_id'] if 'result' in result_obj and not callback_query_id else None
 
     @staticmethod
-    def build_paginated_choices(search_key: str, elements: List[dict], page: int = 1, page_size: int = 5) -> List[ List[dict] ]:
+    def build_paginated_choices(
+        page_key:     str,
+        elements:     List[dict],
+        page:         int = 1,
+        page_size:    int = 5,
+        extra_choice: dict = None
+    ) -> List[ List[dict]]:
         result = []
         if not elements:
             return result
 
-        elements.append({
-            'text': 'Nessuno di questi',
-            'link': search_key.split('://')[0] + '://not-found/' + search_key.split('/')[-1]
-        })
+        if extra_choice:
+            elements.append(extra_choice)
         last_page = math.ceil(len(elements) / page_size)
         prev_page  = page - 2
         next_page  = page + 2
@@ -184,24 +195,24 @@ class TelegramClient:
                 navigator.append({
                     'text': '· {} ·'.format( str(i) ) if i == page else
                               '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
-                    'callback_data': search_key + '/p' + (str(i) if not page == i else '0')
+                    'callback_data': page_key + '/p' + (str(i) if not page == i else '0')
                 })
         else:
             for i in range(prev_page, next_page + 1):
                 navigator.append({
                     'text': '· {} ·'.format( str(i) ) if i == page else
                               '< {}'.format( str(i) ) if i <  page else '{} >'.format( str(i) ),
-                    'callback_data': search_key + '/p' + (str(i) if not page == i else '0')
+                    'callback_data': page_key + '/p' + (str(i) if not page == i else '0')
                 })
             if 1 not in range(prev_page, next_page + 1):
                 navigator[0] = {
                     'text': '|< 1',
-                    'callback_data': search_key + '/p' + ('1' if not page == 1 else '0')
+                    'callback_data': page_key + '/p' + ('1' if not page == 1 else '0')
                 }
             if last_page not in range(prev_page, next_page + 1):
                 navigator[-1] = {
                     'text': '{} >|'.format(str(last_page)),
-                    'callback_data': search_key + '/p' + (str(last_page) if not page == last_page else '0')
+                    'callback_data': page_key + '/p' + (str(last_page) if not page == last_page else '0')
                 }
         if len(navigator) > 1:
             result.append(navigator)

@@ -2,7 +2,7 @@ import os
 import logging
 
 from   fastapi          import HTTPException
-from   typing           import List, Union
+from   typing           import List, Union, Optional
 from   pydantic         import BaseModel, AnyHttpUrl
 from   starlette.status import HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 
@@ -48,12 +48,13 @@ def verify_tvdb_env_variables():
 
 
 class Episode(BaseModel):
-    title: str
-    lang:  str
+    title:       str
+    abs_number:  int = None
+    translated:  bool
 
 
 class Season(BaseModel):
-    episodes: List[Episode]
+    episodes: List[ Union[Episode, None] ]
 
 
 class Media(BaseModel):
@@ -62,7 +63,7 @@ class Media(BaseModel):
     type:    str
     year:    int          = None
     poster:  AnyHttpUrl   = None
-    seasons: List[Season] = None
+    seasons: Optional[ List[ Union[Season, None] ] ]
 
 
 class Match(BaseModel):

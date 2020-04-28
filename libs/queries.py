@@ -86,6 +86,19 @@ REQ_LIST_QUERY = '''
     ORDER BY request_count DESC, request_date ASC
 '''
 
+REQ_USER_LIST_QUERY = '''
+    SELECT
+        request_date,
+        request_id,
+        request_season,
+        request_status,
+        request_notes,
+        plex_notes
+    FROM `plex-project-atlas.project_atlas.plex_user_requests` AS request_data
+    WHERE user_id = {user_id}
+    ORDER BY request_date ASC
+'''
+
 REQ_BY_ID_QUERY = '''
     SELECT
         request_id,
@@ -104,7 +117,22 @@ REQ_BY_ID_QUERY = '''
     ORDER BY request_count DESC, MIN(request_date) ASC
 '''
 
-REQ_INSERT_QUERY = 'INSERT INTO `plex-project-atlas.project_atlas.plex_user_requests`(%FIELDS%) VALUES (%VALUES%)'
+REQ_INSERT_QUERY = '''
+    MERGE INTO
+      `plex-project-atlas.project_atlas.plex_user_requests` AS all_requests
+    USING (
+      SELECT 
+        {user_id}        AS user_id,
+        "{request_id}"   AS request_id,
+        {request_season} AS request_season
+    ) AS new_request
+    ON
+      all_requests.user_id        = new_request.user_id        AND
+      all_requests.request_id     = new_request.request_id     AND
+      all_requests.request_season = new_request.request_season
+    WHEN NOT MATCHED THEN
+      INSERT ({fields}) VALUES ({values})
+'''
 
 REQ_UPDATE_QUERY = '''
     UPDATE `plex-project-atlas.project_atlas.plex_user_requests`

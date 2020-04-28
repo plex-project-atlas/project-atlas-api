@@ -80,26 +80,76 @@ class TVDBClient:
             logging.error('[TVDb] - Error while parsing results: %s', response.request.url)
             return None
 
-        resp_obj = resp_obj['data'] if isinstance(resp_obj['data'], list) else [ resp_obj['data'] ]
-        return {
-            'query': query,
-            'results': [{
-                'guid':   'tvdb://' + ('show' if 'seriesName' in elem else 'movie') + '/' + str(elem['id']),
-                'title':   elem['seriesName'],
-                'type':   'show' if 'seriesName' in elem else 'movie',
-                'year':    elem['firstAired'].split('-')[0]      if elem['firstAired'] else None,
-                'poster': 'https://thetvdb.com' + elem['poster'] if elem['poster']     else None
-            } for elem in resp_obj]
-        }
+        num_pages = resp_obj['links']['last'] if 'links' in resp_obj and 'last' in resp_obj['links'] else None
+        resp_obj  = resp_obj['data'] if isinstance(resp_obj['data'], list) else [ resp_obj['data'] ]
+        if 'episodes' not in response.request.url.path:
+            return {
+                'query': query,
+                'results': [{
+                    'guid':   'tvdb://' + ('show' if 'seriesName' in elem else 'movie') + '/' + str(elem['id']),
+                    'title':   elem['seriesName'],
+                    'type':   'show' if 'seriesName' in elem else 'movie',
+                    'year':    elem['firstAired'].split('-')[0]      if elem['firstAired'] else None,
+                    'poster': 'https://thetvdb.com' + elem['poster'] if elem['poster']     else None
+                } for elem in resp_obj]
+            }
+        else:
+            return {
+                'pages': num_pages,
+                'episodes': [{
+                    'title':              elem['episodeName'],
+                    'translated':         True if elem['overview']   else False,
+                    'season_number':      elem['airedSeason']        if 'airedSeason' in elem else elem['dvdSeason'],
+                    'episode_number':     elem['airedEpisodeNumber'] if 'airedSeason' in elem else elem['dvdEpisodeNumber'],
+                    'episode_abs_number': elem['absoluteNumber']
+                } for elem in resp_obj]
+            }
 
-    async def get_media_by_id(self, media_ids: List[str], media_cache: dict, media_lang: str = 'it'):
+    async def __get_show_episodes(self, client: httpx.AsyncClient, media_id: str, media_page: int = 1):
+        api_endpoint = '/series/{id}/episodes/query'.format(id = media_id)
+        params       = { 'page': media_page }
+        response     = await client.get(
+            url = TVDBClient.api_url + api_endpoint, headers = self.api_headers, params = params
+        )
+        logging.info('[TVDb] - API endpoint was called: %s', response.request.url)
+        media_search = self.__get_show_details_from_json(media_id, response)
+        if media_page == 1 and media_search['pages'] > 1:
+            media_search_pages = [self.__get_show_episodes(
+                client, media_id, media_page)
+            for media_page in range(2, media_search['pages'] + 1)]
+            media_search_pages = await asyncio.gather(*media_search_pages)
+            media_search_pages = [ media_search['episodes'] ] + media_search_pages
+            media_search = [ episode for search_page in media_search_pages for episode in search_page ]
+        else:
+            media_search = media_search['episodes']
+
+        if media_page > 1:
+            return media_search
+
+        result = []
+        for episode in media_search:
+            while len(result) < episode['season_number'] + 1:
+                result.append({ 'episodes': [] })
+            while len(result[ episode['season_number'] ]['episodes']) < episode['episode_number'] + 1:
+                result[ episode['season_number'] ]['episodes'].append(None)
+            result[ episode['season_number'] ]['episodes'][ episode['episode_number'] ] = {
+                'title':      episode['title'],
+                'abs_number': episode['episode_abs_number'],
+                'translated': episode['translated']
+            }
+
+        return result
+
+    async def get_media_by_id(
+            self, media_ids: List[str], media_cache: dict, media_lang: str = 'it', info_only = True):
         async def get_worker(client: httpx.AsyncClient, media_id):
+            cache_key    = media_id if info_only else media_id + '/episodes'
             media_type   = media_id.split('/')[-2]
             media_source = media_id.split('://')[0]
 
-            if media_id in media_cache and time.time() - media_cache[media_id]['fill_date'] < CACHE_VALIDITY:
+            if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
                 logging.info('[TVDb] - Cache hit for key: %s', media_id.split('://')[1])
-                return media_cache[media_id]['fill_data']
+                return media_cache[cache_key]['fill_data']
 
             params = None
             self.api_headers['Accept-Language'] = media_lang
@@ -113,7 +163,9 @@ class TVDBClient:
             )
             logging.info('[TVDb] - API endpoint was called: %s', response.request.url)
             media_search = self.__get_show_details_from_json(media_id, response)
-            media_cache[media_id] = { 'fill_date': time.time(), 'fill_data': media_search }
+            if not info_only:
+                media_search['results'][0]['seasons'] = await self.__get_show_episodes(client, media_id.split('/')[-1])
+            media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': media_search }
 
             return media_search
 

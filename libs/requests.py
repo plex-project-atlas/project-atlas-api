@@ -3,13 +3,15 @@ import json
 import logging
 
 from   fastapi             import HTTPException
+from   datetime            import datetime
 from   google.cloud        import bigquery
 from   libs.models         import Request
 from   libs.queries        import REQ_LIST_QUERY, \
                                   REQ_BY_ID_QUERY, \
                                   REQ_INSERT_QUERY, \
                                   REQ_UPDATE_QUERY, \
-                                  REQ_DELETE_QUERY
+                                  REQ_DELETE_QUERY, \
+                                  REQ_USER_LIST_QUERY
 from   starlette.status    import HTTP_400_BAD_REQUEST, \
                                   HTTP_404_NOT_FOUND, \
                                   HTTP_500_INTERNAL_SERVER_ERROR
@@ -29,20 +31,25 @@ class RequestsClient:
 
         return results
 
-    def get_requests_list(self, pendent_only: bool = True):
-        query    = REQ_LIST_QUERY
+    def get_requests_list(self, pendent_only: bool = True, user_id: int = None):
+        query    = REQ_LIST_QUERY if not user_id else REQ_USER_LIST_QUERY.format(user_id = user_id)
         results  = self.__perform_query_job(query)
 
-        requests = []
-        for request in results:
-            requests.append({
-                'request_date':   str(request['request_date']),
-                'request_id':     request['request_id'],
-                'request_season': request['request_season'],
-                'request_status': request['request_status'],
-                'plex_notes':     request['plex_notes'],
-                'request_count':  request['request_count']
-            })
+        requests = [{
+            'request_date':   str(request['request_date']),
+            'request_id':     request['request_id'],
+            'request_season': request['request_season'],
+            'request_status': request['request_status'],
+            'plex_notes':     request['plex_notes'],
+            'request_count':  request['request_count']
+        } for request in results] if not user_id else [{
+            'request_date':   str(request['request_date']),
+            'request_id':     request['request_id'],
+            'request_season': request['request_season'],
+            'request_status': request['request_status'],
+            'request_notes':  request['request_notes'],
+            'plex_notes':     request['plex_notes']
+        } for request in results]
         return requests if not pendent_only else [ request for request in requests if request['request_status'] == 'WAIT']
 
     async def get_request(self, request_id):
@@ -65,12 +72,17 @@ class RequestsClient:
 
     async def insert_request(self, request_payload: Request):
         params = request_payload.dict()
-        query  = REQ_INSERT_QUERY
-        query  = query.replace('%FIELDS%', ', '.join([ var for var in params if params[var] ]))
-        query  = query.replace(
-            '%VALUES%',
-            ', '.join([ str(params[var]) if isinstance(params[var], int) else '"{}"'.format(params[var])
-            for var in params if params[var] ])
+        params['request_date']   = datetime.today().strftime('%Y-%m-%d')
+        params['request_status'] = 'WAIT'
+        if not params['request_season']:
+            params['request_season'] = -1
+        query  = REQ_INSERT_QUERY.format(
+            user_id        = params['user_id'],
+            request_id     = params['request_id'],
+            request_season = params['request_season'],
+            fields         = ', '.join([ var for var in params if params[var] ]),
+            values         = ', '.join([ str(params[var]) if isinstance(params[var], int) else
+                                         '"{}"'.format(params[var]) for var in params if params[var] ])
         )
 
         result = self.__perform_query_job(query)
