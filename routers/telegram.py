@@ -15,6 +15,9 @@ router          = APIRouter()
 
 async def get_user_request_page(request: Request, user_id: int, pendent_only = True, page = 1):
     choices = request.state.requests.get_requests_list(pendent_only = pendent_only, user_id = user_id)
+    if not choices:
+        return choices
+
     media_details = [
         request.state.tmdb.get_media_by_id(
             [ choice['request_id'] for choice in choices if 'movie' in choice['request_id'] ],
@@ -50,9 +53,12 @@ async def get_user_request_page(request: Request, user_id: int, pendent_only = T
         } for choice in choices],
         page         = page,
         extra_choice = {
-            'text': 'Mostra richieste chiuse',
+            'text': 'Mostra anche le richieste chiuse',
             'link': 'requests://{user_id}/all/p1'.format(user_id = user_id)
-        } if pendent_only else None
+        } if pendent_only else {
+            'text': 'Mostra solo le richieste aperte',
+            'link': 'requests://{user_id}/p1'.format(user_id = user_id)
+        }
     )
     return choices
 
@@ -117,6 +123,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
 
         if action == '/myRequests':
             choices = await get_user_request_page(request, user_id)
+            if not choices:
+                action = 'requests://none'
 
         message_id = request.state.telegram.send_message(
             dest_chat_id = user_id,

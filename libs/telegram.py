@@ -51,7 +51,11 @@ class TelegramClient:
     }
     tg_action_tree['requests://all'] = {
         'status_code':  200,
-        'message':      'Questo è l\'elenco delle tue richieste aperte:'
+        'message':      'Questo è lo storico di tutte le tue richieste:'
+    }
+    tg_action_tree['requests://none'] = {
+        'status_code':  200,
+        'message':      'Non ho trovato alcuna richiesta aperta a tuo nome'
     }
     tg_action_tree['plex://found'] = {
         'status_code':  -1,
