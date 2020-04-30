@@ -161,7 +161,6 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     media_cache = request.state.cache,
                     info_only   = False
                 )
-                media_search = media_search[0]['results'][0]
                 choices_rows = math.ceil(len(media_search['seasons']) - 1 / 5)
                 choices      = []
                 for i in range(0, choices_rows):
@@ -229,7 +228,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                     if e.status_code != HTTP_404_NOT_FOUND:
                         raise e
                     online_results = []
-                online_results = online_results[0]['results'] if online_results and online_results[0]['results'] else []
+
                 if not online_results:
                     action = 'online://not-found/direct'
 
