@@ -162,7 +162,10 @@ class TelegramClient:
             logging.error('[TG] - Error sending message while sending payload: %s', response)
 
             if send_response.status_code != HTTP_400_BAD_REQUEST \
-            or (result_obj and 'message is not modified' not in result_obj['description']):
+            or ( result_obj and not any(error in result_obj['description'] for error in [
+                'query is too old',
+                'message is not modified'
+            ]) ):
                 raise HTTPException(
                     status_code = send_response.status_code,
                     detail      = result_obj['description'] if result_obj else 'Error while sending message'
