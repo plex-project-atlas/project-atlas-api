@@ -135,11 +135,11 @@ class TMDBClient:
                 self.search_media_by_name(media_title, media_type, media_cache, media_lang, media_page)
             for media_page in range(2, media_search['total_pages'] + 1)]
             media_search_pages = await asyncio.gather(*media_search_pages)
-            media_search_pages = [media_search] + media_search_pages
-            media_search = [
-                result
-            for media_search_page in media_search_pages for result in media_search_page['results'] ]
+            media_search = media_search['results'] + [ result for page in media_search_pages for result in page ]
+        else:
+            media_search = media_search['results']
 
+        if media_page == 1:
             if not media_search:
                 raise HTTPException(status_code = HTTP_404_NOT_FOUND)
 
