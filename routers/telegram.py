@@ -205,12 +205,12 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 action       = 'plex://results'
                 search_title = message if not media_page else message.split('/')[-2]
                 try:
-                    plex_results = request.state.plex.search_media_by_name([message.strip()], media_type, request.state.cache)
+                    plex_results = request.state.plex.search_media_by_name(message.strip(), media_type, request.state.cache)
                 except HTTPException as e:
                     if e.status_code != HTTP_404_NOT_FOUND:
                         raise e
                     plex_results = []
-                plex_results = plex_results[0]['results'] if plex_results and plex_results[0]['results'] else []
+
             if not plex_results:
                 action       = 'online://results'
                 search_title = message.split('/')[-1] if not media_page else message.split('/')[-2]

@@ -78,17 +78,17 @@ async def search_all(
 )
 async def match_plex(
         request: Request,
-        media_type: str   = Path(
+        media_type: str  = Path(
             ...,
-            title         = 'Search Type',
-            description   = 'The type of media you are searching for',
-            regex         = '^(movie|show)$'
+            title        = 'Search Type',
+            description  = 'The type of media you are searching for',
+            regex        = '^(movie|show)$'
         ),
-        media_titles: str = Query(
+        media_title: str = Query(
             ...,
-            title         = 'Search Query',
-            description   = 'The title(s) of media you are searching for',
-            min_length    = 3
+            title        = 'Search Query',
+            description  = 'The title of media you are searching for',
+            min_length   = 3
         )
 ):
     """
@@ -101,18 +101,9 @@ async def match_plex(
 
     **Parameters constraints:**
     - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_titles:*** must be at least 3 characters long
-
-    **Notes:**
-    - The input string will be *splitted by commas* performing multiple, parallel requests.
-    - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
+    - ***media_title:*** must be at least 3 characters long
     """
-
-    plex_results = request.state.plex.search_media_by_name(media_titles.split(','), media_type, request.state.cache)
-    if not plex_results:
-        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
-
-    return plex_results
+    return request.state.plex.search_media_by_name(media_title, media_type, request.state.cache)
 
 
 @router.get(
