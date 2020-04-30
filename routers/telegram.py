@@ -18,20 +18,13 @@ async def get_user_request_page(request: Request, user_id: int, pendent_only = T
     if not choices:
         return choices
 
-    media_details = [
-        request.state.tmdb.get_media_by_id(
-            [ choice['request_id'] for choice in choices if 'movie' in choice['request_id'] ],
-            request.state.cache
-        ),
-        request.state.tvdb.get_media_by_id(
-            [ choice['request_id'] for choice in choices if 'show' in choice['request_id'] ],
-            request.state.cache
-        )
-    ]
+    media_details = []
+    for choice in choices:
+        if 'movie' in choice['request_id']:
+            media_details.append( request.state.tmdb.get_media_by_id(choice['request_id'], request.state.cache) )
+        else:
+            media_details.append( request.state.tvdb.get_media_by_id(choice['request_id'], request.state.cache) )
     media_details = await asyncio.gather(*media_details)
-    media_details = [
-        media['results'][0] for media_type in media_details for media in media_type if media['results']
-    ]
     for choice in choices:
         media_info = [ media for media in media_details if media['guid'] == choice['request_id'] ][0]
         choice['request_info'] = media_info
@@ -164,7 +157,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 media_search = request.state.tmdb.get_media_by_id if message.startswith('tmdb') else \
                                request.state.tvdb.get_media_by_id
                 media_search = await media_search(
-                    media_ids   = [message],
+                    media_id    = message,
                     media_cache = request.state.cache,
                     info_only   = False
                 )
@@ -231,7 +224,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                         dest_message = 'Ottimo, faccio subito una ricerca online'
                     )
                 try:
-                    online_results = await media_search([{'title': search_title, 'type':  media_type}], request.state.cache)
+                    online_results = await media_search(search_title, media_type, request.state.cache)
                 except HTTPException as e:
                     if e.status_code != HTTP_404_NOT_FOUND:
                         raise e

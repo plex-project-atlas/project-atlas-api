@@ -66,20 +66,10 @@ class Media(BaseModel):
     seasons: Optional[ List[ Union[Season, None] ] ]
 
 
-class Match(BaseModel):
-    query:   str
-    results: List[Media] = []
-
-
 class MatchAll(BaseModel):
     imdb: List[Media] = []
     tmdb: List[Media] = []
     tvdb: List[Media] = []
-
-
-class MatchList(BaseModel):
-    query:   str
-    results: Union[ MatchAll, List[Media] ] = []
 
 
 class Request(BaseModel):

@@ -1,17 +1,19 @@
-import os
 import re
 import json
+import time
 import httpx
 import asyncio
 import logging
 import urllib.parse
 
+from   fastapi          import Request, HTTPException
 from   typing           import List
-from   libs.queries     import IMDB_SHOW_QUERY, \
-                               IMDB_MOVIE_FULL_QUERY, \
-                               IMDB_MOVIE_TRANSLATION_QUERY
+from   libs.models      import Media
 from   google.cloud     import bigquery
-from   starlette.status import HTTP_200_OK
+from   starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
+
+
+CACHE_VALIDITY = 86400  # 1 day
 
 
 class IMDBClient:
@@ -24,7 +26,7 @@ class IMDBClient:
         self.bq_client = bigquery.Client()
 
     @staticmethod
-    def __get_details_from_json(query, query_type: str, response: httpx.Response):
+    def __get_details_from_json(media_type: str, response: httpx.Response):
         if response.status_code != HTTP_200_OK:
             return None
 
@@ -44,59 +46,55 @@ class IMDBClient:
                 if 'q' not in elem:
                     continue
                 results.append({
-                    'guid':   'imdb://' + elem['id'],
+                    'guid':   'imdb://' + ('show/' if elem['q'] == 'TV series' else 'movie/') + elem['id'],
                     'title':  elem['l'],
                     'type':   'show'       if elem['q'] == 'TV series' else 'movie',
                     'year':   elem['y']    if 'y' in elem              else None,
                     'poster': elem['i'][0] if 'i' in elem              else None
                 })
 
-        return {
-            'query':   query,
-            'results': [item for item in results if item['type'] == query_type] if query_type else results
-        }
+        return {'results': [item for item in results if item['type'] == media_type] if media_type else results}
 
-    async def get_media_by_id(self, imdb_ids: List[str], media_type: str, trans_only: bool = False, lang: str = 'IT'):
-        query = IMDB_MOVIE_TRANSLATION_QUERY if trans_only \
-                else IMDB_MOVIE_FULL_QUERY if media_type == 'movie' else IMDB_SHOW_QUERY
-        query = query.replace( '%IMDB_IDS%', ','.join("'{0}'".format(imdb_id) for imdb_id in imdb_ids) )
-        query = query.replace( '%LANG%', lang.upper() )
+    async def search_media_by_name(
+        self,
+        request:     Request,
+        media_title: str,
+        media_type:  str
+    ) -> List[Media]:
+        cache_key = 'imdb://search/' + media_type + '/' + re.sub(r'\W', '_', media_title)
+        if cache_key in request.state.cache and time.time() - request.state.cache[cache_key]['fill_date'] < CACHE_VALIDITY:
+            logging.info('[TMDb] - Cache hit for key: %s', cache_key)
+            return [
+                request.state.cache[media_info]['fill_data']
+                for media_info in request.state.cache[cache_key]['fill_data']
+            ]
 
-        query_job = self.bq_client.query(query, project = os.environ['DB_PROJECT'], location = os.environ['DB_REGION'])
-        try:
-            results = query_job.result()
-        except:
-            logging.error('[BQ] - Error while retrieving media %s', 'translations' if trans_only else 'infos')
-            logging.error('[BQ] - Involved IDs: %s', ', '.join( "'{0}'".format(imdb_id) for imdb_id in imdb_ids) )
-            results = []
+        api_endpoint = '/suggests/' + media_title[0].lower() + '/' + urllib.parse.quote(media_title, safe = '') + '.json'
+        response     = httpx.get(url = IMDBClient.api_url + api_endpoint, headers = self.api_headers)
+        logging.info('[IMDb] - API endpoint was called: %s', response.request.url)
+        media_search = self.__get_details_from_json(media_type, response)
 
-        if results and results.total_rows:
-            try:
-                results = [json.loads(result['mediaInfo']) for result in results]
-            except:
-                logging.error('[IMDb] - Error while parsing database media translations')
-                results = []
+        if not media_search['results']:
+            raise HTTPException(status_code = HTTP_404_NOT_FOUND)
 
-        return results
+        media_info   = []
+        media_search = media_search['results']
+        for media_id in media_search:
+            media_info.append(
+                request.state.tmdb.get_media_by_id(media_id['guid'], request.state.cache)
+                if media_type == 'movie' else
+                request.state.tvdb.get_media_by_id(media_id['guid'], request.state.cache)
+            )
+        media_infos = await asyncio.gather(*media_info)
 
-    async def search_media_by_name(self, titles: List[str], media_type: str, lang: str = 'IT'):
-        async def search_worker(client: httpx.AsyncClient, query, query_type: str, headers: dict):
-            api_endpoint = '/suggests/' + query[0].lower() + '/' + urllib.parse.quote(query, safe = '') + '.json'
-            logging.info('IMDBClient - Calling API endpoint: %s', IMDBClient.api_url + api_endpoint)
-            response = await client.get(url = IMDBClient.api_url + api_endpoint, headers = headers)
-            return self.__get_details_from_json(query, query_type, response)
+        for media in media_search:
+            translation = [ media_info for media_info in media_infos if media_info['guid'] == media['guid'] ]
+            if translation:
+                media['title'] = translation[0]['title']
 
-        httpx_client = httpx.AsyncClient()
-        requests     = (search_worker(httpx_client, elem.strip(), media_type, self.api_headers) for elem in titles)
-        responses    = await asyncio.gather(*requests)
+        request.state.cache[cache_key] = {'fill_date': time.time(), 'fill_data': []}
+        for media_info in media_search:
+            request.state.cache[cache_key]['fill_data'].append(media_info['guid'])
+            request.state.cache[ media_info['guid'] ] = {'fill_date': time.time(), 'fill_data': media_info}
 
-        imdb_ids     = [ result['guid'].split('://')[1] for response in responses for result in response['results'] ]
-        media_infos  = await self.get_media_by_id(imdb_ids, media_type, True)
-
-        for response in responses:
-            for result in response['results']:
-                translation = [ media for media in media_infos if result['guid'].endswith(media['titleId']) ]
-                if translation:
-                    result['title'] = translation[0]['titleData'][0]['title']
-
-        return responses
+        return media_search

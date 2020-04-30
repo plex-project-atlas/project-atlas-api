@@ -3,7 +3,7 @@ import asyncio
 from   fastapi             import APIRouter, Depends, Path, Query, HTTPException
 from   typing              import List
 from   libs.models         import verify_plex_env_variables, verify_tmdb_env_variables, verify_tvdb_env_variables, \
-                                  MatchList, Match
+                                  MatchAll, Media
 from   starlette.requests  import Request
 from   starlette.status    import HTTP_501_NOT_IMPLEMENTED, \
                                   HTTP_503_SERVICE_UNAVAILABLE, \
@@ -21,7 +21,7 @@ router = APIRouter()
         Depends(verify_tmdb_env_variables),
         Depends(verify_tvdb_env_variables)
     ],
-    response_model = MatchList,
+    response_model = MatchAll,
     responses      = {
         HTTP_501_NOT_IMPLEMENTED: {}
     }
@@ -71,7 +71,7 @@ async def search_all(
     '/plex/{media_type}',
     summary        = 'Search into Project: Atlas Database',
     dependencies   = [Depends(verify_plex_env_variables)],
-    response_model = List[Match],
+    response_model = List[Media],
     responses      = {
         HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
     }
@@ -118,7 +118,7 @@ async def match_plex(
 @router.get(
     '/imdb/{media_type}',
     summary        = 'Search into IMDb Database',
-    response_model = List[Match]
+    response_model = List[Media]
 )
 async def match_imdb(
     request: Request,
@@ -128,10 +128,10 @@ async def match_imdb(
         description   = 'The type of media you are searching for',
         regex         = '^(movie|show)$'
     ),
-    media_titles: str = Query(
+    media_title: str  = Query(
         ...,
         title         = 'Search Query',
-        description   = 'The title(s) of media you are searching for',
+        description   = 'The title of media you are searching for',
         min_length    = 3
     )
 ):
@@ -142,24 +142,16 @@ async def match_imdb(
 
     **Parameters constraints:**
     - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_titles:*** must be at least 3 characters long
-
-    **Notes:**
-    - The input string will be *splitted by commas* performing multiple, parallel requests.
-    - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
+    - ***media_title:*** must be at least 3 characters long
     """
-    imdb_results = await request.state.imdb.search_media_by_name(media_titles.split(','), media_type)
-    if not imdb_results:
-        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
-
-    return imdb_results
+    return await request.state.imdb.search_media_by_name(request, media_title.strip(), media_type)
 
 
 @router.get(
     '/tmdb/{media_type}',
     summary        = 'Search into TMDb Database',
     dependencies   = [Depends(verify_tmdb_env_variables)],
-    response_model = List[Match],
+    response_model = List[Media],
     responses      = {
         HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
     }
@@ -172,43 +164,30 @@ async def search_tmdb(
             description   = 'The type of media you are searching for',
             regex         = '^(movie|show)$'
         ),
-        media_titles: str = Query(
+        media_title: str  = Query(
             ...,
             title         = 'Search Query',
-            description   = 'The title(s) of media you are searching for',
+            description   = 'The title of media you are searching for',
             min_length    = 3
         )
 ):
     """
     Search for the requested string in The Movie DB database.
 
-    Search multiple models in a single request.
     Currently supports searching for movies and TV shows in The Movie DB database.
 
     **Parameters constraints:**
     - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_titles:*** must be at least 3 characters long
-
-    **Notes:**
-    - The input string will be *splitted by commas* performing multiple, parallel requests.
-    - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
+    - ***media_title:*** must be at least 3 characters long
     """
-    tmdb_results = await request.state.tmdb.search_media_by_name([{
-        'title': media_title.strip(),
-        'type':  media_type
-    } for media_title in media_titles.split(',')], request.state.cache)
-
-    if not tmdb_results:
-        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
-
-    return tmdb_results
+    return await request.state.tmdb.search_media_by_name(media_title.strip(), media_type, request.state.cache)
 
 
 @router.get(
     '/tvdb/{media_type}',
     summary        = 'Search into TheTVDB Database',
     dependencies   = [Depends(verify_tvdb_env_variables)],
-    response_model = List[Match],
+    response_model = List[Media],
     responses      = {
         HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
     }
@@ -221,10 +200,10 @@ async def search_tvdb(
             description   = 'The type of media you are searching for',
             regex         = '^(movie|show)$'
         ),
-        media_titles: str = Query(
+        media_title: str  = Query(
             ...,
             title         = 'Search Query',
-            description   = 'The title(s) of media you are searching for',
+            description   = 'The title of media you are searching for',
             min_length    = 3
         )
 ):
@@ -235,18 +214,6 @@ async def search_tvdb(
 
     **Parameters constraints:**
     - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_titles:*** must be at least 3 characters long
-
-    **Notes:**
-    - The input string will be *splitted by commas* performing multiple, parallel requests.
-    - The returned object will contain _[*].results.seasons_ only if _media_type_ is _show_
+    - ***media_title:*** must be at least 3 characters long
     """
-    tvdb_results = await request.state.tvdb.search_media_by_name([{
-        'title': media_title.strip(),
-        'type':  media_type
-    } for media_title in media_titles.split(',')], request.state.cache)
-
-    if not tvdb_results:
-        raise HTTPException(status_code = HTTP_503_SERVICE_UNAVAILABLE, detail = 'Service Unavailable')
-
-    return tvdb_results
+    return await request.state.tvdb.search_media_by_name(media_title.strip(), media_type, request.state.cache)
