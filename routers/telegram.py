@@ -193,7 +193,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             ]
         # request for user request notes request
         elif message.startswith('requests://edit'):
-            action = 'requests://edit'
+            action       = 'requests://edit'
+            request_code = message.replace('requests://edit/', '')
         # request for user request notes insert
         elif user_status == request.state.telegram.tg_action_tree['requests://edit']['status_code']:
             action       = 'requests://edit/done'
@@ -212,7 +213,7 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
             action = 'requests://delete'
             user_request = await request.state.requests.get_request(
                 media_cache  = request.state.cache,
-                request_code = request.state.telegram.get_user_status(user_id)['request_code']
+                request_code = message.replace('requests://delete/', '')
             )
             await request.state.requests.delete_request( RequestPayload(
                 request_id     = user_request['request_id'],
