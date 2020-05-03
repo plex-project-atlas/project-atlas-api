@@ -1,7 +1,9 @@
 import re
 import math
 import emoji
+import base64
 import asyncio
+import hashlib
 import logging
 
 from   fastapi             import APIRouter, Body, Request, Response, HTTPException
@@ -14,23 +16,22 @@ router          = APIRouter()
 
 
 async def get_user_request_page(request: Request, user_id: int, pendent_only = True, page = 1):
-    choices = request.state.requests.get_requests_list(pendent_only = pendent_only, user_id = user_id)
-    if not choices:
-        return choices
+    user_choices = request.state.requests.get_requests_list(pendent_only = pendent_only, user_id = user_id)
+    if not user_choices:
+        return user_choices
 
-    media_details = []
-    for choice in choices:
-        if 'movie' in choice['request_id']:
-            media_details.append( request.state.tmdb.get_media_by_id(choice['request_id'], request.state.cache) )
-        else:
-            media_details.append( request.state.tvdb.get_media_by_id(choice['request_id'], request.state.cache) )
+    media_details = [
+        request.state.tmdb.get_media_by_id(choice['request_id'], request.state.cache) \
+        if 'movie' in choice['request_id'] else
+        request.state.tvdb.get_media_by_id(choice['request_id'], request.state.cache)
+    for choice in user_choices]
     media_details = await asyncio.gather(*media_details)
-    for choice in choices:
+    for choice in user_choices:
         media_info = [ media for media in media_details if media['guid'] == choice['request_id'] ][0]
         choice['request_info'] = media_info
 
-    choices = request.state.telegram.build_paginated_choices(
-        page_key = 'requests://{user_id}{filter}'.format(user_id = user_id, filter = '/all' if not pendent_only else ''),
+    user_choices = request.state.telegram.build_paginated_choices(
+        page_key = 'requests://user/{user_id}{filter}'.format(user_id = user_id, filter = '/all' if not pendent_only else ''),
         elements = [{
             'text': emoji.emojize( '{status} {icon} - {title} ({year}){season}'.format(
                 status = ':yellow_circle:' if choice['request_status'] == 'WAIT' else \
@@ -42,18 +43,20 @@ async def get_user_request_page(request: Request, user_id: int, pendent_only = T
                 season = ' - Stagione {}'.format(choice['request_season']) if choice['request_season'] > 0 else
                          ' - Speciali'   if choice['request_season'] == 0  else ''
             ) ),
-            'link': 'requests://{user_id}'.format(user_id = user_id)
-        } for choice in choices],
+            'link': 'requests://code/{request_code}'.format( request_code = base64.b64encode( hashlib.sha256(
+                ( choice['request_id'] + '/' + str(user_id) + '/' + str(choice['request_season']) ).encode('utf-8')
+            ).digest() ).decode('utf-8') )
+        } for choice in user_choices],
         page         = page,
         extra_choice = {
             'text': 'Mostra anche le richieste chiuse',
-            'link': 'requests://{user_id}/all/p1'.format(user_id = user_id)
+            'link': 'requests://user/{user_id}/all/p1'.format(user_id = user_id)
         } if pendent_only else {
             'text': 'Mostra solo le richieste aperte',
-            'link': 'requests://{user_id}/p1'.format(user_id = user_id)
+            'link': 'requests://user/{user_id}/p1'.format(user_id = user_id)
         }
     )
-    return choices
+    return user_choices
 
 
 @router.post(
@@ -69,7 +72,8 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         return Response(status_code = HTTP_204_NO_CONTENT)
 
     # extracting telegram's update action or message
-    action, user_id, user_name, user_first_name, user_last_name, choices, message = None, None, None, None, None, None, None
+    message, custom_message, request_code = None, None, None
+    action, user_id, user_name, user_first_name, user_last_name, choices = None, None, None, None, None, None
     if 'callback_query' in payload:
         # immediately answer to callback request and close it
         request.state.telegram.send_message(callback_query_id = payload['callback_query']['id'])
@@ -139,11 +143,82 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         if media_page and int( media_page.group(1) ) == 0:
             return Response(status_code = HTTP_204_NO_CONTENT)
         # request for user requests page
-        if message.startswith('requests://') and media_page:
+        if message.startswith('requests://user') and media_page:
             action  = '/myRequests' if '/all/' not in message else 'requests://all'
             choices = await get_user_request_page( request, user_id, False,  int( media_page.group(1) ) ) \
                       if '/all/' in message else \
                       await get_user_request_page( request, user_id, True, int( media_page.group(1) ) )
+        # request for user request details
+        elif message.startswith('requests://code'):
+            action = 'requests://code'
+            user_request = await request.state.requests.get_request(
+                media_cache  = request.state.cache,
+                request_code = message.replace('requests://code/', '')
+            )
+            media_info = request.state.tmdb.get_media_by_id \
+                         if 'movie' in user_request['request_id'] else \
+                         request.state.tvdb.get_media_by_id
+            media_info = await media_info(user_request['request_id'], request.state.cache)
+            custom_message = emoji.emojize(request.state.telegram.tg_action_tree['requests://code']['message'].format(
+                request_state = ':yellow_circle: In Attesa' if user_request['request_status'] == 'WAIT' else \
+                                ':green_circle: Inserito'   if user_request['request_status'] == 'OK'   else \
+                                ':red_circle: Non Trovato'  if user_request['request_status'] == 'KO'   \
+                                else ':blue_circle: Sconosciuto',
+                media_type    = ':movie_camera: Film' if 'movie' in user_request['request_id'] \
+                                else ':clapper_board: Serie TV',
+                media_title   = media_info['title'],
+                media_year    = media_info['year'],
+                media_season  = user_request['request_season'] if user_request['request_season'] > 0  else \
+                                'Speciali'                     if user_request['request_season'] == 0 else '\\-',
+                plex_notes    = user_request['plex_notes']     if user_request['plex_notes']          else '\\-',
+                request_notes = user_request['request_notes']  if user_request['request_notes']       else '\\-'
+            ) )
+            choices = [
+                [{
+                        'text': 'Aggiungi/Modifica Note',
+                        'callback_data': 'requests://edit/{request_code}'.format(
+                            request_code = message.replace('requests://code/', '')
+                        )
+                }],
+                [{
+                        'text': '< Indietro',
+                        'callback_data': 'requests://user/{user_id}/p1'.format(user_id = user_id)
+                },
+                {
+                    'text': 'Cancella',
+                    'callback_data': 'requests://delete/{request_code}'.format(
+                        request_code = message.replace('requests://code/', '')
+                    )
+                }]
+            ]
+        # request for user request notes request
+        elif message.startswith('requests://edit'):
+            action = 'requests://edit'
+        # request for user request notes insert
+        elif user_status == request.state.telegram.tg_action_tree['requests://edit']['status_code']:
+            action       = 'requests://edit/done'
+            user_request = await request.state.requests.get_request(
+                media_cache  = request.state.cache,
+                request_code = request.state.telegram.get_user_status(user_id)['request_code']
+            )
+            await request.state.requests.patch_request( RequestPayload(
+                request_id     = user_request['request_id'],
+                user_id        = user_request['user_id'],
+                request_season = user_request['request_season'],
+                request_notes  = user_request['request_notes']
+            ) )
+        # request for user request deletion
+        elif message.startswith('requests://delete'):
+            action = 'requests://delete'
+            user_request = await request.state.requests.get_request(
+                media_cache  = request.state.cache,
+                request_code = request.state.telegram.get_user_status(user_id)['request_code']
+            )
+            await request.state.requests.delete_request( RequestPayload(
+                request_id     = user_request['request_id'],
+                user_id        = user_request['user_id'],
+                request_season = user_request['request_season']
+            ) )
         # random message, redirect to intro
         elif user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
             action = '/help'
@@ -257,17 +332,18 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
         message_id = request.state.telegram.send_message(
             edit_message_id = request.state.telegram.get_user_status(user_id)['last_message_id'] if media_page else None,
             dest_chat_id    = user_id,
-            dest_message    = request.state.telegram.tg_action_tree[action]['message'],
+            dest_message    = custom_message if custom_message else request.state.telegram.tg_action_tree[action]['message'],
             choices         = choices if choices else request.state.telegram.tg_action_tree[action]['choices']
                               if 'choices' in request.state.telegram.tg_action_tree[action] else None
         )
         if pending_db_ops:
             await pending_db_ops
         request.state.telegram.set_user_status(
-            user_id,
-            request.state.telegram.tg_action_tree[action]['status_code'] if 'status_code' in
-            request.state.telegram.tg_action_tree[action] else user_status,
-            message_id
+            user_id      = user_id,
+            user_status  = request.state.telegram.tg_action_tree[action]['status_code'] if 'status_code' in
+                           request.state.telegram.tg_action_tree[action]                else user_status,
+            message_id   = message_id,
+            request_code = request_code if request_code else None
         )
         return Response(status_code = HTTP_204_NO_CONTENT)
 

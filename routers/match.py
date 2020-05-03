@@ -56,6 +56,6 @@ async def match_id(
     elif media_db == 'tvdb':
         media_info = request.state.tvdb.get_media_by_id
     else:
-        raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED, detail = 'Not Implemented')
+        raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED)
 
     return await media_info(media_db + '://' + media_type + '/' + media_id, request.state.cache)

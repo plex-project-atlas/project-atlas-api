@@ -24,6 +24,12 @@ REQ_USER_LIST_QUERY = '''
     ORDER BY request_date ASC
 '''
 
+REQ_USER_QUERY = '''
+    SELECT *
+    FROM `plex-project-atlas.project_atlas.plex_user_requests` AS request_data
+    WHERE SHA256( CONCAT(request_id, '/', user_id, '/', request_season) ) = FROM_BASE64('{request_code}')
+'''
+
 REQ_BY_ID_QUERY = '''
     SELECT
         request_id,
@@ -67,5 +73,5 @@ REQ_UPDATE_QUERY = '''
 
 REQ_DELETE_QUERY = '''
     DELETE FROM `plex-project-atlas.project_atlas.plex_user_requests`
-    WHERE request_id = "{request_id}" AND user_id = {user_id}
+    WHERE request_id = "{request_id}" AND user_id = {user_id} AND request_season = {request_season}
 '''

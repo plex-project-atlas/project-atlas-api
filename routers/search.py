@@ -43,28 +43,22 @@ async def search_all(
 
     **Parameters constraints:**
     - ***media_title:*** must be at least 3 characters long
-
-    **Notes:**
-    - The returned object will contain _service.results.seasons_ only if _media_type_ is _show_
     """
     requests  = [
-        request.state.imdb.search_media_by_name([media_title], None),
-        request.state.tmdb.search_media_by_name([{'title': media_title, 'type': 'movie'}]),
-        request.state.tmdb.search_media_by_name([{'title': media_title, 'type': 'show'}]),
-        request.state.tvdb.search_media_by_name([{'title': media_title, 'type': 'show'}]),
+        request.state.imdb.search_media_by_name(request, media_title, 'movie'),
+        request.state.imdb.search_media_by_name(request, media_title, 'show'),
+        request.state.tmdb.search_media_by_name(media_title, 'movie', request.state.cache),
+        request.state.tmdb.search_media_by_name(media_title, 'show',  request.state.cache),
+        request.state.tvdb.search_media_by_name(media_title, 'show',  request.state.cache),
     ]
     responses = await asyncio.gather(*requests)
 
-    results = {
-        'query':   media_title,
-        'results': {
-            'imdb': responses[0][0]['results'],
-            'tmdb': responses[1][0]['results'] + responses[2][0]['results'],
-            'tvdb': responses[3][0]['results']
-        }
+    media_search = {
+        'imdb': responses[0] + responses[1],
+        'tmdb': responses[2] + responses[3],
+        'tvdb': responses[4]
     }
-
-    return results
+    return media_search
 
 
 @router.get(

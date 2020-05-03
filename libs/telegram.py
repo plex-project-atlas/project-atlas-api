@@ -50,12 +50,31 @@ class TelegramClient:
         'message':      'Questo è l\'elenco delle tue richieste aperte:'
     }
     tg_action_tree['requests://all'] = {
-        'status_code':  200,
         'message':      'Questo è lo storico di tutte le tue richieste:'
     }
     tg_action_tree['requests://none'] = {
-        'status_code':  200,
         'message':      'Non ho trovato alcuna richiesta aperta a tuo nome'
+    }
+    tg_action_tree['requests://code'] = {
+        'message':      '*Stato:* {request_state}\n\n'   + \
+                        '*Genere:* {media_type}\n'     + \
+                        '*Titolo:* {media_title}\n'    + \
+                        '*Anno:* {media_year}\n'       + \
+                        '*Stagione:* {media_season}\n' + \
+                        '*Note Plex:* {plex_notes}\n'  + \
+                        '*Note Utente:* {request_notes}\n'
+    }
+    tg_action_tree['requests://edit'] = {
+        'status_code':  210,
+        'message':      'Ok, inviami le note da allegare alla richiesta'
+    }
+    tg_action_tree['requests://edit/done'] = {
+        'status_code':  -1,
+        'message':      'Grazie, le tue note sono state salvate\\!'
+    }
+    tg_action_tree['requests://delete'] = {
+        'status_code':  -1,
+        'message':      'Ottimo, la tua richiesta è stata cancellata'
     }
     tg_action_tree['plex://found'] = {
         'status_code':  -1,
@@ -86,11 +105,15 @@ class TelegramClient:
         self.tg_bot_token    = os.environ.get('TG_BOT_TOKEN')
         self.tg_api_base_url = 'https://api.telegram.org/bot'
 
-    def set_user_status(self, user_id, user_status: int, message_id: int = None):
+    def set_user_status(self, user_id, user_status: int, message_id: int = None, request_code: str = None):
         ds_key    = self.db_client.key('tg_user_status', user_id)
         ds_entity = datastore.Entity(key = ds_key)
         ds_entity['fill_date'] = time.time()
-        ds_entity['fill_data'] = { 'user_status': user_status, 'last_message_id': message_id }
+        ds_entity['fill_data'] = {
+            'user_status':     user_status,
+            'last_message_id': message_id,
+            'request_code':    request_code
+        }
 
         try:
             self.db_client.put(ds_entity)
@@ -109,7 +132,8 @@ class TelegramClient:
         ds_data = ds_entity['fill_data'] if ds_entity and time.time() - ds_entity['fill_date'] < CACHE_VALIDITY else None
         return {
             'user_status':     ds_data['user_status']     if ds_data and 'user_status'     in ds_data else -1,
-            'last_message_id': ds_data['last_message_id'] if ds_data and 'last_message_id' in ds_data else None
+            'last_message_id': ds_data['last_message_id'] if ds_data and 'last_message_id' in ds_data else None,
+            'request_code':    ds_data['request_code']    if ds_data and 'request_code'    in ds_data else None
         }
 
     def send_message(

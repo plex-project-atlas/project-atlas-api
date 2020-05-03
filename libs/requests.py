@@ -7,6 +7,7 @@ from   datetime            import datetime
 from   google.cloud        import bigquery
 from   libs.models         import Request
 from   libs.queries        import REQ_LIST_QUERY, \
+                                  REQ_USER_QUERY, \
                                   REQ_BY_ID_QUERY, \
                                   REQ_INSERT_QUERY, \
                                   REQ_UPDATE_QUERY, \
@@ -27,7 +28,7 @@ class RequestsClient:
             results = query_job.result()
         except:
             logging.error('[BQ] - Error while executing query: %s', query)
-            raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR, detail = 'Internal Server Error')
+            raise HTTPException(status_code = HTTP_500_INTERNAL_SERVER_ERROR)
 
         return results
 
@@ -52,21 +53,37 @@ class RequestsClient:
         } for request in results]
         return requests if not pendent_only else [ request for request in requests if request['request_status'] == 'WAIT']
 
-    async def get_request(self, request_id):
-        query   = REQ_BY_ID_QUERY.replace('%REQ_ID%', request_id)
+    async def get_request(self, media_cache: dict, request_id: str = None, request_code: str = None):
+        if not any([request_id, request_code]):
+            logging.error('[Requests] - No filter provided for request search')
+            raise HTTPException(status_code = HTTP_404_NOT_FOUND)
+
+        query   = REQ_USER_QUERY if request_code else REQ_BY_ID_QUERY
+        query   = query.format(request_id = request_id, request_code = request_code)
         results = self.__perform_query_job(query)
 
         if results.total_rows == 0:
-            raise HTTPException(status_code = HTTP_404_NOT_FOUND, detail = 'Not Found')
+            raise HTTPException(status_code = HTTP_404_NOT_FOUND)
 
         request_info = next( iter(results) )
         request_info = {
-            'request_id':     request_info['request_id'],
-            'request_season': request_info['request_season'],
-            'request_status': request_info['request_status'],
-            'plex_notes':     request_info['plex_notes'],
-            'request_count':  request_info['request_count'],
-            'request_list':   request_info['request_list']
+            "request_date":    request_info['request_date'],
+            "user_id":         request_info['user_id'],
+            "user_name":       request_info['user_name'],
+            "user_first_name": request_info['user_first_name'],
+            "user_last_name":  request_info['user_last_name'],
+            "request_id":      request_info['request_id'],
+            "request_season":  request_info['request_season'],
+            "request_notes":   request_info['request_notes'],
+            "request_status":  request_info['request_status'],
+            "plex_notes":      request_info['plex_notes']
+        } if request_code else {
+            'request_id':      request_info['request_id'],
+            'request_season':  request_info['request_season'],
+            'request_status':  request_info['request_status'],
+            'plex_notes':      request_info['plex_notes'],
+            'request_count':   request_info['request_count'],
+            'request_list':    request_info['request_list']
         }
         return request_info
 
@@ -134,7 +151,11 @@ class RequestsClient:
 
     async def delete_request(self, request_payload: Request):
         query = REQ_DELETE_QUERY
-        query = query.format(request_id = request_payload.request_id, user_id = request_payload.user_id)
+        query = query.format(
+            request_id     = request_payload.request_id,
+            user_id        = request_payload.user_id,
+            request_season = request_payload.request_season
+        )
 
         result = self.__perform_query_job(query)
 
