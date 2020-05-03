@@ -68,10 +68,10 @@ REQ_INSERT_QUERY = '''
 REQ_UPDATE_QUERY = '''
     UPDATE `plex-project-atlas.project_atlas.plex_user_requests`
     SET %UPDATE%
-    WHERE request_id = "%REQ_ID%"
+    WHERE SHA256( CONCAT(request_id, '/', user_id, '/', request_season) ) = FROM_BASE64('{request_code}')
 '''
 
 REQ_DELETE_QUERY = '''
     DELETE FROM `plex-project-atlas.project_atlas.plex_user_requests`
-    WHERE request_id = "{request_id}" AND user_id = {user_id} AND request_season = {request_season}
+    WHERE SHA256( CONCAT(request_id, '/', user_id, '/', request_season) ) = FROM_BASE64('{request_code}')
 '''

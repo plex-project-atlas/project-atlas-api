@@ -202,12 +202,14 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 media_cache  = request.state.cache,
                 request_code = request.state.telegram.get_user_status(user_id)['request_code']
             )
-            await request.state.requests.patch_request( RequestPayload(
-                request_id     = user_request['request_id'],
-                user_id        = user_request['user_id'],
-                request_season = user_request['request_season'],
-                request_notes  = user_request['request_notes']
-            ) )
+            await request.state.requests.patch_request( request.state.telegram.get_user_status(user_id)['request_code'],
+                RequestPayload(
+                    request_id     = user_request['request_id'],
+                    user_id        = user_request['user_id'],
+                    request_season = user_request['request_season'],
+                    request_notes  = user_request['request_notes']
+                )
+            )
         # request for user request deletion
         elif message.startswith('requests://delete'):
             action = 'requests://delete'
@@ -215,11 +217,14 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 media_cache  = request.state.cache,
                 request_code = message.replace('requests://delete/', '')
             )
-            await request.state.requests.delete_request( RequestPayload(
-                request_id     = user_request['request_id'],
-                user_id        = user_request['user_id'],
-                request_season = user_request['request_season']
-            ) )
+            await request.state.requests.delete_request(
+                message.replace('requests://delete/', ''),
+                RequestPayload(
+                    request_id     = user_request['request_id'],
+                    user_id        = user_request['user_id'],
+                    request_season = user_request['request_season']
+                )
+            )
         # random message, redirect to intro
         elif user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
             action = '/help'

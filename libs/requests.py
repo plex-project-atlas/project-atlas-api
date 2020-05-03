@@ -106,7 +106,7 @@ class RequestsClient:
 
         return result.total_rows > 0
 
-    async def patch_request(self, request_payload: Request):
+    async def patch_request(self, request_code: str, request_payload: Request):
         if not any([
             request_payload.request_season,
             request_payload.request_notes,
@@ -149,13 +149,9 @@ class RequestsClient:
 
         return result.total_rows > 0
 
-    async def delete_request(self, request_payload: Request):
+    async def delete_request(self, request_code: str):
         query = REQ_DELETE_QUERY
-        query = query.format(
-            request_id     = request_payload.request_id,
-            user_id        = request_payload.user_id,
-            request_season = request_payload.request_season
-        )
+        query = query.format(request_code = request_code)
 
         result = self.__perform_query_job(query)
 
