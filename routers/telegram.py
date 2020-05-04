@@ -168,10 +168,11 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                                 else ':clapper_board: Serie TV',
                 media_title   = media_info['title'],
                 media_year    = media_info['year'],
-                media_season  = user_request['request_season'] if user_request['request_season'] > 0  else \
-                                'Speciali'                     if user_request['request_season'] == 0 else '\\-',
-                plex_notes    = user_request['plex_notes']     if user_request['plex_notes']          else '\\-',
-                request_notes = user_request['request_notes']  if user_request['request_notes']       else '\\-'
+                media_season  = user_request['request_season'] if user_request['request_season'] > 0    else \
+                                'Speciali'                     if user_request['request_season'] == 0   else \
+                                'Tutte'                        if 'show' in user_request['request_id'] else '\\-',
+                plex_notes    = user_request['plex_notes']     if user_request['plex_notes']            else '\\-',
+                request_notes = user_request['request_notes']  if user_request['request_notes']         else '\\-'
             ) )
             choices = [
                 [{
@@ -202,29 +203,18 @@ async def plexa_answer( request: Request, payload: Any = Body(...) ):
                 media_cache  = request.state.cache,
                 request_code = request.state.telegram.get_user_status(user_id)['request_code']
             )
-            await request.state.requests.patch_request( request.state.telegram.get_user_status(user_id)['request_code'],
+            await request.state.requests.patch_request(
                 RequestPayload(
-                    request_id     = user_request['request_id'],
-                    user_id        = user_request['user_id'],
-                    request_season = user_request['request_season'],
-                    request_notes  = user_request['request_notes']
-                )
+                    request_id    = user_request['request_id'],
+                    user_id       = user_request['user_id'],
+                    request_notes = message
+                ),
+                request.state.telegram.get_user_status(user_id)['request_code']
             )
         # request for user request deletion
         elif message.startswith('requests://delete'):
             action = 'requests://delete'
-            user_request = await request.state.requests.get_request(
-                media_cache  = request.state.cache,
-                request_code = message.replace('requests://delete/', '')
-            )
-            await request.state.requests.delete_request(
-                message.replace('requests://delete/', ''),
-                RequestPayload(
-                    request_id     = user_request['request_id'],
-                    user_id        = user_request['user_id'],
-                    request_season = user_request['request_season']
-                )
-            )
+            await request.state.requests.delete_request( message.replace('requests://delete/', '') )
         # random message, redirect to intro
         elif user_status == request.state.telegram.tg_action_tree['/help']['status_code']:
             action = '/help'

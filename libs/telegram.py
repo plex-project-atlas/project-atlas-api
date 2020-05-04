@@ -56,13 +56,13 @@ class TelegramClient:
         'message':      'Non ho trovato alcuna richiesta aperta a tuo nome'
     }
     tg_action_tree['requests://code'] = {
-        'message':      '*Stato:* {request_state}\n\n'   + \
-                        '*Genere:* {media_type}\n'     + \
-                        '*Titolo:* {media_title}\n'    + \
-                        '*Anno:* {media_year}\n'       + \
-                        '*Stagione:* {media_season}\n' + \
-                        '*Note Plex:* {plex_notes}\n'  + \
-                        '*Note Utente:* {request_notes}\n'
+        'message':      '*Stato:* _{request_state}_\n\n'   + \
+                        '*Genere:* _{media_type}_\n'     + \
+                        '*Titolo:* _{media_title}_\n'    + \
+                        '*Anno:* _{media_year}_\n'       + \
+                        '*Stagione:* _{media_season}_\n' + \
+                        '*Note Plex:* _{plex_notes}_\n'  + \
+                        '*Note Utente:* _{request_notes}_\n'
     }
     tg_action_tree['requests://edit'] = {
         'status_code':  210,

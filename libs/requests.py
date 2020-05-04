@@ -106,7 +106,7 @@ class RequestsClient:
 
         return result.total_rows > 0
 
-    async def patch_request(self, request_code: str, request_payload: Request):
+    async def patch_request(self, request_payload: Request, request_code: str = None):
         if not any([
             request_payload.request_season,
             request_payload.request_notes,
@@ -126,8 +126,8 @@ class RequestsClient:
             logging.error('[Requests] - Cannot update global and specific fields all together')
             raise HTTPException(status_code = HTTP_400_BAD_REQUEST, detail = 'Bad Request')
 
-        if request_payload.request_season and 'movie' in request_payload.request_id:
-            logging.error('[Requests] - Cannot update season number of a movie request')
+        if any([request_payload.request_season is not None, request_payload.plex_notes]) and not request_code:
+            logging.error('[Requests] - Cannot update season or user notes without providing a request code')
             raise HTTPException(status_code = HTTP_400_BAD_REQUEST, detail = 'Bad Request')
 
         update = []
@@ -140,11 +140,13 @@ class RequestsClient:
             update.append( 'request_status = "{}"'.format(request_payload.request_status) )
         if request_payload.plex_notes:
             update.append( 'plex_notes     = "{}"'.format(request_payload.plex_notes)     )
-        query  = query.replace('%UPDATE%', ', '.join(update))
-        query  = query.replace('%REQ_ID%', request_payload.request_id)
-        if any([request_payload.request_season, request_payload.request_notes]):
-            query = query + ' AND user_id = %USR_ID%'.replace( '%USR_ID%', str(request_payload.user_id) )
-
+        query  = query.format(
+            updates    = ', '.join(update),
+            condition  = "request_id = '{request_id}'".format(request_id = request_payload.request_id)
+                         if not request_code else
+                         "SHA256(CONCAT(request_id, '/', user_id, '/', request_season)) = FROM_BASE64('{request_code}')"
+                         .format(request_code = request_code)
+        )
         result = self.__perform_query_job(query)
 
         return result.total_rows > 0
