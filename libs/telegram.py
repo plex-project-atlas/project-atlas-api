@@ -53,6 +53,7 @@ class TelegramClient:
         'message':      'Questo è lo storico di tutte le tue richieste:'
     }
     tg_action_tree['requests://none'] = {
+        'status_code':   -1,
         'message':      'Non ho trovato alcuna richiesta aperta a tuo nome'
     }
     tg_action_tree['requests://code'] = {
