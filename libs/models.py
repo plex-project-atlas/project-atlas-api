@@ -54,7 +54,7 @@ class Episode(BaseModel):
 
 
 class Season(BaseModel):
-    episodes: List[ Union[Episode, None] ]
+    episodes: List[ Union[Episode, bool, None] ]
 
 
 class Media(BaseModel):

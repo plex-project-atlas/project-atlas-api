@@ -47,9 +47,9 @@ async def search_all(
     requests  = [
         request.state.imdb.search_media_by_name(request, media_title, 'movie'),
         request.state.imdb.search_media_by_name(request, media_title, 'show'),
-        request.state.tmdb.search_media_by_name(media_title, 'movie', request.state.cache),
-        request.state.tmdb.search_media_by_name(media_title, 'show',  request.state.cache),
-        request.state.tvdb.search_media_by_name(media_title, 'show',  request.state.cache),
+        request.state.tmdb.search_media_by_name(request.state.httpx, media_title, 'movie', request.state.cache),
+        request.state.tmdb.search_media_by_name(request.state.httpx, media_title, 'show',  request.state.cache),
+        request.state.tvdb.search_media_by_name(request.state.httpx, media_title, 'show',  request.state.cache),
     ]
     responses = await asyncio.gather(*requests)
 
@@ -165,7 +165,12 @@ async def search_tmdb(
     - ***media_type:*** must be one of: *movie*, *show*
     - ***media_title:*** must be at least 3 characters long
     """
-    return await request.state.tmdb.search_media_by_name(media_title.strip(), media_type, request.state.cache)
+    return await request.state.tmdb.search_media_by_name(
+        request.state.httpx,
+        media_title.strip(),
+        media_type,
+        request.state.cache
+    )
 
 
 @router.get(
@@ -201,4 +206,9 @@ async def search_tvdb(
     - ***media_type:*** must be one of: *movie*, *show*
     - ***media_title:*** must be at least 3 characters long
     """
-    return await request.state.tvdb.search_media_by_name(media_title.strip(), media_type, request.state.cache)
+    return await request.state.tvdb.search_media_by_name(
+        request.state.httpx,
+        media_title.strip(),
+        media_type,
+        request.state.cache
+    )

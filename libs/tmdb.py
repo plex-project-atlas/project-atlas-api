@@ -75,10 +75,16 @@ class TMDBClient:
                 'year':   elem['release_date'].split('-')[0]      if 'release_date'   in elem and elem['release_date']   else
                           elem['first_air_date'].split('-')[0]    if 'first_air_date' in elem and elem['first_air_date'] else None,
                 'poster': self.img_base_url + elem['poster_path'] if self.img_base_url        and elem['poster_path']    else None
-            } for elem in resp_obj]
+            } for elem in resp_obj if 'id' in elem]
         }
 
-    async def get_media_by_id(self, media_id: str, media_cache: dict, media_lang: str = 'it-IT') -> Media:
+    async def get_media_by_id(
+        self,
+        httpx_client: httpx.AsyncClient,
+        media_id:     str,
+        media_cache:  dict,
+        media_lang:   str = 'it-IT'
+    ) -> Media:
         media_type   = media_id.split('/')[-2]
         media_source = media_id.split('://')[0]
 
@@ -92,7 +98,11 @@ class TMDBClient:
             params['external_source'] = media_source + '_id'
         else:
             api_endpoint = '/' + ('tv' if media_type == 'show' else media_type) + '/' + media_id.split('/')[-1]
-        response = httpx.get(url  = TMDBClient.api_url + api_endpoint, headers = self.api_headers, params = params)
+        response = await httpx_client.get(
+            url     = TMDBClient.api_url + api_endpoint,
+            headers = self.api_headers,
+            params  = params
+        )
         logging.info('[TMDb] - API endpoint was called: %s', response.request.url)
         media_search = self.__get_show_details_from_json(response)
 
@@ -109,11 +119,12 @@ class TMDBClient:
 
     async def search_media_by_name(
         self,
-        media_title: str,
-        media_type:  str,
-        media_cache: dict,
-        media_lang:  str = 'it-IT',
-        media_page:  int = 1
+        httpx_client: httpx.AsyncClient,
+        media_title:  str,
+        media_type:   str,
+        media_cache:  dict,
+        media_lang:   str = 'it-IT',
+        media_page:   int = 1
     ) -> List[Media]:
         cache_key = 'tmdb://search/' + media_type + '/' + re.sub(r'\W', '_', media_title)
         if media_page == 1 and cache_key in media_cache \
@@ -126,7 +137,11 @@ class TMDBClient:
 
         api_endpoint = '/search/' + ('tv' if media_type == 'show' else media_type)
         params       = { 'language': media_lang, 'query': media_title, 'page': media_page }
-        response     = httpx.get(url  = TMDBClient.api_url + api_endpoint, headers = self.api_headers, params = params)
+        response = await httpx_client.get(
+            url     = TMDBClient.api_url + api_endpoint,
+            headers = self.api_headers,
+            params  = params
+        )
         logging.info('[TMDb] - API endpoint was called: %s', response.request.url)
 
         media_search = self.__get_show_details_from_json(response)

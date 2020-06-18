@@ -1,5 +1,3 @@
-import asyncio
-
 from   fastapi             import APIRouter, Depends, Path, HTTPException
 from   libs.models         import verify_plex_env_variables, verify_tmdb_env_variables, verify_tvdb_env_variables, \
                                   Media
@@ -58,4 +56,4 @@ async def match_id(
     else:
         raise HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED)
 
-    return await media_info(media_db + '://' + media_type + '/' + media_id, request.state.cache)
+    return await media_info(request.state.httpx, media_db + '://' + media_type + '/' + media_id, request.state.cache)

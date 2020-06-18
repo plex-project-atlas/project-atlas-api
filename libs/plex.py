@@ -5,7 +5,7 @@ import logging
 
 from   fastapi          import HTTPException
 from   typing           import List
-from   libs.models      import Media
+from   libs.models      import Media, Season, Episode
 from   plexapi.myplex   import MyPlexAccount, PlexServer
 from   starlette.status import HTTP_404_NOT_FOUND, HTTP_500_INTERNAL_SERVER_ERROR
 
@@ -44,3 +44,40 @@ class PlexClient:
             raise HTTPException(status_code = HTTP_404_NOT_FOUND)
 
         return media_search
+
+    def get_show_list(self) -> List[Media]:
+        plex_show_list = []
+        for section in self.plex_client.library.sections():
+            if section.type.lower() != 'show':
+                continue
+            for show in section.all():
+                # extract TTVDB ID for the show
+                id_search = re.search('\.(thetvdb|themoviedb):\/\/(\d{5,}).*$', show.guid, re.IGNORECASE)
+                if not id_search:
+                    logging.warning('[Plex] - Show agent isn\'t TVDb nor TMDb: ' + show.title)
+                    logging.warning('[Plex] - Plex show agent: ' + show.guid)
+                    continue
+
+                show_entry = Media(
+                    guid    = ('tvdb' if id_search.group(1) == 'thetvdb' else 'tmdb') + '://show/' + id_search.group(2),
+                    title   = show.title,
+                    type    = 'show',
+                    year    = show.year,
+                    poster  = show.thumbUrl,
+                    seasons = []
+                )
+
+                for season in show.seasons():
+                    # fill season array with placeholders
+                    while len(show_entry.seasons) < season.index + 1:
+                        show_entry.seasons.append(None)
+                    show_entry.seasons[season.index] = Season(episodes = [])
+                    for episode in season.episodes():
+                        # fill episode array with placeholders
+                        while len(show_entry.seasons[season.index].episodes) < episode.index + 1:
+                            show_entry.seasons[season.index].episodes.append(False)
+                        show_entry.seasons[season.index].episodes[episode.index] = True
+
+                plex_show_list.append(show_entry)
+
+        return plex_show_list

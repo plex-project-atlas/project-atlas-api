@@ -57,9 +57,9 @@ class IMDBClient:
 
     async def search_media_by_name(
         self,
-        request:     Request,
-        media_title: str,
-        media_type:  str
+        request:      Request,
+        media_title:  str,
+        media_type:   str
     ) -> List[Media]:
         cache_key = 'imdb://search/' + media_type + '/' + re.sub(r'\W', '_', media_title)
         if cache_key in request.state.cache and time.time() - request.state.cache[cache_key]['fill_date'] < CACHE_VALIDITY:
@@ -70,7 +70,10 @@ class IMDBClient:
             ]
 
         api_endpoint = '/suggests/' + media_title[0].lower() + '/' + urllib.parse.quote(media_title, safe = '') + '.json'
-        response     = httpx.get(url = IMDBClient.api_url + api_endpoint, headers = self.api_headers)
+        response = await request.state.httpx.get(
+            url     = IMDBClient.api_url + api_endpoint,
+            headers = self.api_headers
+        )
         logging.info('[IMDb] - API endpoint was called: %s', response.request.url)
         media_search = self.__get_details_from_json(media_type, response)
 
@@ -81,9 +84,9 @@ class IMDBClient:
         media_search = media_search['results']
         for media_id in media_search:
             media_info.append(
-                request.state.tmdb.get_media_by_id(media_id['guid'], request.state.cache)
+                request.state.tmdb.get_media_by_id(request.state.httpx, media_id['guid'], request.state.cache)
                 if media_type == 'movie' else
-                request.state.tvdb.get_media_by_id(media_id['guid'], request.state.cache)
+                request.state.tvdb.get_media_by_id(request.state.httpx, media_id['guid'], request.state.cache)
             )
         media_infos = await asyncio.gather(*media_info)
 
