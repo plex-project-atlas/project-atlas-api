@@ -1,18 +1,20 @@
 import time
 import httpx
+import asyncio
 import logging
 import uvicorn
 
 from fastapi                 import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from routers                 import plex, match, search, telegram, requests
+from sqlalchemy.orm          import Session
+from .database.database      import SessionLocal, db_engine
+from .database               import crud, models, schemas
 from libs.plex               import PlexClient
-from libs.imdb               import IMDBClient
 from libs.tmdb               import TMDBClient
 from libs.tvdb               import TVDBClient
-from libs.telegram           import TelegramClient
+from libs.scraper            import ScraperClient
 from libs.requests           import RequestsClient
-from libs.models             import env_vars_check
 from starlette.requests      import Request
 from starlette.status        import HTTP_200_OK, \
                                     HTTP_204_NO_CONTENT, \
@@ -23,38 +25,54 @@ from starlette.status        import HTTP_200_OK, \
 cache   = {}
 clients = {}
 
-
-def verify_telegram_env_variables():
-    required  = [
-        'TG_BOT_TOKEN'
-    ]
-    suggested = []
-    env_vars_check(required, suggested)
-
+models.BaseModel.metadata.create_all(bind = db_engine)
 
 app = FastAPI(
     title       = 'Project: Atlas - Backend API',
     description = 'API used mainly for Project: Atlas chatbots and tools',
     version     = '1.5.0dev',
     docs_url    = '/',
-    redoc_url   = None
+    redoc_url   = None,
+    debug       = True
 )
 
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
 @app.on_event('startup')
-def instantiate_clients():
+async def instantiate_clients():
+    logging.getLogger('filelock').disabled = True
+    logging.getLogger('plexapi').disabled  = True
+
+    logging.info('[FastAPI] - Initializing HTTPX client...')
+    clients['httpx']    = httpx.AsyncClient(
+        limits    = httpx.Limits(max_connections = 50),
+        timeout   = httpx.Timeout(60.0),
+        http2     = True,
+        transport = httpx.AsyncHTTPTransport(
+            retries = 5
+        )
+    )
     logging.info('[FastAPI] - Initializing Plex client...')
     clients['plex']     = PlexClient()
-    logging.info('[FastAPI] - Initializing IMDB client...')
-    clients['imdb']     = IMDBClient()
     logging.info('[FastAPI] - Initializing TMDB client...')
     clients['tmdb']     = TMDBClient()
     logging.info('[FastAPI] - Initializing TVDB client...')
-    clients['tvdb']     = TVDBClient()
-    logging.info('[FastAPI] - Initializing Telegram client...')
-    clients['telegram'] = TelegramClient()
+    clients['tvdb']     = TVDBClient(clients['httpx'])
+    await clients['tvdb'].do_authenticate()
+    logging.info('[FastAPI] - Initializing Scraper client...')
+    clients['scraper']  = ScraperClient(clients['httpx'])
+    await asyncio.gather(*[clients['scraper'].do_login(website) for website in clients['scraper'].config['sources']])
     logging.info('[FastAPI] - Initializing Requests client...')
     clients['requests'] = RequestsClient()
+
+    # logging.getLogger('plexapi').disabled = False
 
 
 app.add_middleware(
@@ -69,22 +87,17 @@ app.add_middleware(
 @app.middleware('http')
 async def add_global_vars(request: Request, call_next):
     request.state.cache    = cache
+    request.state.httpx    = clients['httpx']
     request.state.plex     = clients['plex']
-    request.state.imdb     = clients['imdb']
     request.state.tmdb     = clients['tmdb']
     request.state.tvdb     = clients['tvdb']
-    request.state.telegram = clients['telegram']
+    request.state.scraper  = clients['scraper']
     request.state.requests = clients['requests']
-    request.state.httpx    = httpx.AsyncClient(
-        # pool_limits = httpx.PoolLimits(max_connections = 50),
-        timeout     = httpx.Timeout(connect_timeout = 60.0),
-        http2       = True
-    )
 
     start_time = time.time()
     response = await call_next(request)
     logging.info( '[FastAPI] - The request was completed in: %ss', '{:.2f}'.format(time.time() - start_time) )
-    await request.state.httpx.aclose()
+    # await request.state.httpx.aclose()
     return response
 
 
@@ -152,4 +165,5 @@ app.include_router(
 
 
 if __name__ == "__main__":
+    # LOGGING_CONFIG["formatters"]["default"]["fmt"] = "%(pathname)s:%(lineno)d [%(name)s] %(levelprefix)s %(message)s"
     uvicorn.run(app, host = "0.0.0.0", port = 8080)

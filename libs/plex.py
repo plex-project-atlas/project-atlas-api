@@ -2,11 +2,12 @@ import os
 import re
 import time
 import logging
+import plexapi.exceptions
 
 from   fastapi          import HTTPException
 from   typing           import List
 from   libs.models      import Media, Season, Episode
-from   plexapi.myplex   import MyPlexAccount, PlexServer
+from   plexapi.myplex   import MyPlexAccount, PlexClient, PlexServer
 from   starlette.status import HTTP_404_NOT_FOUND, HTTP_500_INTERNAL_SERVER_ERROR
 
 
@@ -15,10 +16,12 @@ CACHE_VALIDITY = 86400  # 1 day
 
 class PlexClient:
     def __init__(self):
+        logging.getLogger('urllib3').setLevel(logging.ERROR)
+
         try:
-            self.plex_client = MyPlexAccount().resource(os.environ['PLEXAPI_AUTH_SRV_NAME'])
-            self.plex_client = PlexServer(token = self.plex_client.accessToken)
-        except:
+            self.plex_client = MyPlexAccount(token = os.environ['PLEXAPI_AUTH_CLIENT_TOKEN'])\
+                               .resource(os.environ['PLEXAPI_AUTH_SRV_NAME']).connect(ssl = True)
+        except plexapi.exceptions.NotFound:
             self.plex_client = None
 
     def search_media_by_name(self, media_title, media_type: str, media_cache: dict) -> List[Media]:

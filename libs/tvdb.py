@@ -1,68 +1,53 @@
 import os
 import re
-import sys
 import time
 import httpx
 import asyncio
 import logging
 
 from   fastapi          import HTTPException
-from   typing           import Optional, List
+from   typing           import Optional, List, Dict
 from   langdetect       import detect, lang_detect_exception, DetectorFactory
 from   libs.models      import Media
-from   starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND
+from   libs.commons     import async_ext_api_call
+from   starlette.status import HTTP_200_OK, HTTP_404_NOT_FOUND, HTTP_500_INTERNAL_SERVER_ERROR
 
 
 CACHE_VALIDITY = 86400  # 1 day
 
 
 class TVDBClient:
-    # Ref: https://api.thetvdb.com/swagger (v3.0.0)
-    api_url = 'https://api.thetvdb.com'
-
-    def __init__(self):
-        self.usr_name    = os.environ.get('TVDB_USR_NAME')
-        self.usr_key     = os.environ.get('TVDB_USR_KEY')
+    def __init__(self, http_client: httpx.AsyncClient):
+        # Ref: https://app.swaggerhub.com/apis-docs/thetvdb/tvdb-api_v_4/4.1.0 (v4.1.0)
+        self.api_url     = 'https://api4.thetvdb.com/v4'
+        self.usr_pin     = os.environ.get('TVDB_USR_PIN')
         self.api_key     = os.environ.get('TVDB_API_KEY')
-        self.api_token   = self.__get_jwt_token()
         self.api_headers = {
-            'Accept':          'application/vnd.thetvdb.v3.0.0',
+            'Accept':          'application/json',
             'Content-Type':    'application/json',
-            'Authorization':   'Bearer ' + self.api_token if self.api_token else ''
         }
+        self.api_token   = None
+        self.http_client = http_client
 
-    def __get_jwt_token(self) -> Optional[str]:
+    async def do_authenticate(self):
         api_endpoint = '/login'
-        headers = {
-            'Accept':       'application/json',
-            'Content-Type': 'application/json'
-        }
         payload = {
-            'username': self.usr_name,
-            'userkey':  self.usr_key,
-            'apikey':   self.api_key
+            'pin':    self.usr_pin,
+            'apikey': self.api_key
         }
-        try:
-            response = httpx.post(
-                url     = TVDBClient.api_url + api_endpoint,
-                headers = headers,
-                json    = payload,
-                timeout = None
-            )
-        except:
-            error_details = sys.exc_info()
-            logging.error('[TVDb] - Error while retrieving JWT token: %s', error_details[0])
-            return None
-
-        if response.status_code != HTTP_200_OK:
-            logging.error('[TVDb] - Error while retrieving JWT token: APIs returned error %s', response.status_code)
-            return None
-
-        resp_obj = response.json()
-        return resp_obj['token']
+        response = await async_ext_api_call(
+            http_client = self.http_client,
+            url         = self.api_url + api_endpoint,
+            use_post    = True,
+            headers     = self.api_headers,
+            json        = payload,
+            timeout     = 300
+        )
+        self.api_token = response['data']['token']
+        self.api_headers['Authorization'] = 'Bearer ' + self.api_token if self.api_token else ''
 
     @staticmethod
-    def __get_show_details_from_json(response: httpx.Response):
+    def __get_show_details_from_json(response: Dict):
         def detect_language(text: str, lang: str = 'it'):
             if not text:
                 return False
@@ -72,27 +57,8 @@ class TVDBClient:
                 return False
                 pass
 
-        if response.status_code != HTTP_200_OK:
-            message = None
-            try:
-                message = response.json()
-                message = message['Error'] if 'Error' in message else ''
-                logging.error('[TVDb] - Error retrieving results, received: %s', message)
-            except:
-                pass
-            raise HTTPException(
-                status_code = response.status_code,
-                detail      = message if message else None
-            )
-
-        try:
-            resp_obj = response.json()
-        except:
-            logging.error('[TVDb] - Error while parsing results: %s', response.request.url)
-            return None
-
-        num_pages = resp_obj['links']['last'] if 'links' in resp_obj and 'last' in resp_obj['links'] else None
-        resp_obj  = resp_obj['data'] if isinstance(resp_obj['data'], list) else [ resp_obj['data'] ]
+        num_pages = response['links']['last'] if 'links' in response and 'last' in response['links'] else None
+        resp_obj  = response['data'] if isinstance(response['data'], list) else [ response['data'] ]
         if 'episodes' not in response.request.url.path:
             return {
                 'results': [{
@@ -130,7 +96,8 @@ class TVDBClient:
         if media_page == 1 and media_search['pages'] > 1:
             media_search_pages = [
                 self.__get_show_episodes(httpx_client, media_id, media_page)
-            for media_page in range(2, media_search['pages'] + 1)]
+                for media_page in range(2, media_search['pages'] + 1)
+            ]
             media_search_pages = await asyncio.gather(*media_search_pages)
             media_search_pages = [ media_search['episodes'] ] + media_search_pages
             media_search = [ episode for search_page in media_search_pages for episode in search_page ]
@@ -182,12 +149,12 @@ class TVDBClient:
             params = { media_source + 'Id': media_id.split('/')[-1] }
         else:
             api_endpoint = '/' + ('movies' if media_type == 'movie' else 'series') + '/' + media_id.split('/')[-1]
-        response = await httpx_client.get(
-            url     = TVDBClient.api_url + api_endpoint,
-            headers = self.api_headers,
-            params  = params
+        response = await async_ext_api_call(
+            http_client = httpx_client,
+            url         = TVDBClient.api_url + api_endpoint,
+            headers     = self.api_headers,
+            params      = params
         )
-        logging.info('[TVDb] - API endpoint was called: %s', response.request.url)
         media_search = self.__get_show_details_from_json(response)
 
         if not media_search['results']:
@@ -209,33 +176,42 @@ class TVDBClient:
         media_title:  str,
         media_type:   str,
         media_cache:  dict,
+        media_year:   int = None,
         media_lang:   str = 'it'
     ) -> List[Media]:
-        cache_key = 'tvdb://search/' + media_type + '/' + re.sub(r'\W', '_', media_title)
+        # Serving from cache
+        cache_key = f'tvdb://search/{media_type}/' + re.sub(r'\W', '_', media_title)
         if cache_key in media_cache and time.time() - media_cache[cache_key]['fill_date'] < CACHE_VALIDITY:
             logging.info('[TVDb] - Cache hit for key: %s', cache_key)
             return [
                 media_cache[media_info]['fill_data']
                 for media_info in media_cache[cache_key]['fill_data']
             ]
+        # -----------------
 
-        api_endpoint = '/search' + ('/series' if media_type == 'show' else '')
-        params       = { 'name': media_title }
+        api_endpoint = '/search'
+        params       = {
+            'query': media_title,
+            'type':  media_type,
+        }
+        if media_year:
+            params['year'] = media_year
         self.api_headers['Accept-Language'] = media_lang
-        response = await httpx_client.get(
-            url     = TVDBClient.api_url + api_endpoint,
-            headers = self.api_headers,
-            params  = params
+        response = await async_ext_api_call(
+            http_client = httpx_client,
+            url         = TVDBClient.api_url + api_endpoint,
+            headers     = self.api_headers,
+            params      = params
         )
-        logging.info('[TMDb] - API endpoint was called: %s', response.request.url)
         media_search = self.__get_show_details_from_json(response)
-
         if not media_search['results']:
             raise HTTPException(status_code = HTTP_404_NOT_FOUND)
 
+        # Filling the cache
         media_cache[cache_key] = { 'fill_date': time.time(), 'fill_data': [] }
         for media_info in media_search['results']:
             media_cache[cache_key]['fill_data'].append(media_info['guid'])
             media_cache[ media_info['guid'] ] = { 'fill_date': time.time(), 'fill_data': media_info }
+        # -----------------
 
         return media_search['results']

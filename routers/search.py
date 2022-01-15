@@ -45,8 +45,6 @@ async def search_all(
     - ***media_title:*** must be at least 3 characters long
     """
     requests  = [
-        request.state.imdb.search_media_by_name(request, media_title, 'movie'),
-        request.state.imdb.search_media_by_name(request, media_title, 'show'),
         request.state.tmdb.search_media_by_name(request.state.httpx, media_title, 'movie', request.state.cache),
         request.state.tmdb.search_media_by_name(request.state.httpx, media_title, 'show',  request.state.cache),
         request.state.tvdb.search_media_by_name(request.state.httpx, media_title, 'show',  request.state.cache),
@@ -54,7 +52,6 @@ async def search_all(
     responses = await asyncio.gather(*requests)
 
     media_search = {
-        'imdb': responses[0] + responses[1],
         'tmdb': responses[2] + responses[3],
         'tvdb': responses[4]
     }
@@ -71,7 +68,7 @@ async def search_all(
     }
 )
 async def match_plex(
-        request: Request,
+        request:    Request,
         media_type: str  = Path(
             ...,
             title        = 'Search Type',
@@ -101,38 +98,6 @@ async def match_plex(
 
 
 @router.get(
-    '/imdb/{media_type}',
-    summary        = 'Search into IMDb Database',
-    response_model = List[Media]
-)
-async def match_imdb(
-    request: Request,
-    media_type: str   = Path(
-        ...,
-        title         = 'Search Type',
-        description   = 'The type of media you are searching for',
-        regex         = '^(movie|show)$'
-    ),
-    media_title: str  = Query(
-        ...,
-        title         = 'Search Query',
-        description   = 'The title of media you are searching for',
-        min_length    = 3
-    )
-):
-    """
-    Search for the requested string in the IMDb database.
-
-    Currently supports searching for movies and TV shows in IMDb database.
-
-    **Parameters constraints:**
-    - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_title:*** must be at least 3 characters long
-    """
-    return await request.state.imdb.search_media_by_name(request, media_title.strip(), media_type)
-
-
-@router.get(
     '/tmdb/{media_type}',
     summary        = 'Search into TMDb Database',
     dependencies   = [Depends(verify_tmdb_env_variables)],
@@ -142,7 +107,7 @@ async def match_imdb(
     }
 )
 async def search_tmdb(
-        request: Request,
+        request:    Request,
         media_type: str   = Path(
             ...,
             title         = 'Search Type',
@@ -183,7 +148,7 @@ async def search_tmdb(
     }
 )
 async def search_tvdb(
-        request: Request,
+        request:    Request,
         media_type: str   = Path(
             ...,
             title         = 'Search Type',
@@ -212,3 +177,38 @@ async def search_tvdb(
         media_type,
         request.state.cache
     )
+
+
+@router.get(
+    '/online',
+    summary        = 'Scrape search results from DDL websites',
+    # dependencies   = [Depends(verify_tvdb_env_variables)],
+    # response_model = List[Media],
+    responses      = {
+        HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
+    }
+)
+async def search_online(
+        request:     Request,
+        media_title: str  = Query(
+            ...,
+            title         = 'Search Query',
+            description   = 'The title of media you are searching for',
+            min_length    = 3
+        )
+):
+    """
+    Search for the requested string across multiple DDL websites.
+
+    **Parameters constraints:**
+    - ***media_title:*** must be at least 3 characters long
+    """
+    results = await asyncio.gather(*[ request.state.scraper.do_search(
+        website = website,
+        query   = media_title.strip()
+    ) for website in request.state.scraper.config['sources'] if website['enabled'] ])
+    results = [result for site_results in results for result in site_results]
+    results.sort(key = lambda result: result['date'], reverse = True)
+    results.sort(key = lambda result: result['quality'])
+
+    return results
