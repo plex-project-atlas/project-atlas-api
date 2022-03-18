@@ -8,13 +8,13 @@ from fastapi                 import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from routers                 import plex, match, search, telegram, requests
 from sqlalchemy.orm          import Session
-from .database.database      import SessionLocal, db_engine
-from .database               import crud, models, schemas
+#from .database.database      import SessionLocal, db_engine
+#from .database               import crud, models, schemas
 from libs.plex               import PlexClient
 from libs.tmdb               import TMDBClient
 from libs.tvdb               import TVDBClient
 from libs.scraper            import ScraperClient
-from libs.requests           import RequestsClient
+#from libs.requests           import RequestsClient
 from starlette.requests      import Request
 from starlette.status        import HTTP_200_OK, \
                                     HTTP_204_NO_CONTENT, \
@@ -25,7 +25,7 @@ from starlette.status        import HTTP_200_OK, \
 cache   = {}
 clients = {}
 
-models.BaseModel.metadata.create_all(bind = db_engine)
+#models.BaseModel.metadata.create_all(bind = db_engine)
 
 app = FastAPI(
     title       = 'Project: Atlas - Backend API',
@@ -37,12 +37,12 @@ app = FastAPI(
 )
 
 
-def get_db():
+""" def get_db():
     db = SessionLocal()
     try:
         yield db
     finally:
-        db.close()
+        db.close() """
 
 
 @app.on_event('startup')
@@ -64,13 +64,13 @@ async def instantiate_clients():
     logging.info('[FastAPI] - Initializing TMDB client...')
     clients['tmdb']     = TMDBClient()
     logging.info('[FastAPI] - Initializing TVDB client...')
-    clients['tvdb']     = TVDBClient(clients['httpx'])
-    await clients['tvdb'].do_authenticate()
+    #clients['tvdb']     = TVDBClient(clients['httpx'])
+    #await clients['tvdb'].do_authenticate()
     logging.info('[FastAPI] - Initializing Scraper client...')
     clients['scraper']  = ScraperClient(clients['httpx'])
-    await asyncio.gather(*[clients['scraper'].do_login(website) for website in clients['scraper'].config['sources']])
+    #await asyncio.gather(*[clients['scraper'].do_login(website) for website in clients['scraper'].config['sources']])
     logging.info('[FastAPI] - Initializing Requests client...')
-    clients['requests'] = RequestsClient()
+    #clients['requests'] = RequestsClient()
 
     # logging.getLogger('plexapi').disabled = False
 
@@ -90,9 +90,9 @@ async def add_global_vars(request: Request, call_next):
     request.state.httpx    = clients['httpx']
     request.state.plex     = clients['plex']
     request.state.tmdb     = clients['tmdb']
-    request.state.tvdb     = clients['tvdb']
+    #request.state.tvdb     = clients['tvdb']
     request.state.scraper  = clients['scraper']
-    request.state.requests = clients['requests']
+    #request.state.requests = clients['requests']
 
     start_time = time.time()
     response = await call_next(request)
@@ -151,7 +151,7 @@ app.include_router(
 )
 
 
-app.include_router(
+""" app.include_router(
     # import the /telegram branch of PlexAPI
     telegram.router,
     prefix       = '/telegram',
@@ -161,7 +161,7 @@ app.include_router(
         HTTP_200_OK:                  {},
         HTTP_503_SERVICE_UNAVAILABLE: {}
     }
-)
+) """
 
 
 if __name__ == "__main__":
