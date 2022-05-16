@@ -1,9 +1,6 @@
-import asyncio
-
 from   fastapi             import APIRouter, Depends, Path, Query, HTTPException
-from   typing              import List
-from   libs.models         import verify_plex_env_variables, verify_tmdb_env_variables, verify_tvdb_env_variables, \
-                                  MatchAll, Media
+from   typing              import List, Union
+from   libs.models         import MediaType, Media, Movie, Show
 from   starlette.requests  import Request
 from   starlette.status    import HTTP_501_NOT_IMPLEMENTED, \
                                   HTTP_503_SERVICE_UNAVAILABLE, \
@@ -14,21 +11,23 @@ router = APIRouter()
 
 
 @router.get(
-    '',
-    summary        = 'Search across all supported APIs',
-    dependencies   = [
-        Depends(verify_plex_env_variables),
-        Depends(verify_tmdb_env_variables),
-        Depends(verify_tvdb_env_variables)
-    ],
-    response_model = MatchAll,
+    '/sources/{source}/types/{type}',
+    summary        = 'Search Movies or Shows across a variety of sources',
+    response_model = List,
     responses      = {
         HTTP_501_NOT_IMPLEMENTED: {}
     }
 )
-async def search_all(
-        request:     Request,
-        media_title: str = Query(
+async def search(
+        request: Request,
+        source:  str,
+        type:    str = Query(
+            ...,
+            title       = 'Media Type',
+            description = 'The type of the media you are searching for',
+            regex       = '^movies$|^series$'
+        ),
+        query:   str = Query(
             ...,
             title        = 'Search Query',
             description  = 'The title of media you are searching for',
@@ -44,171 +43,4 @@ async def search_all(
     **Parameters constraints:**
     - ***media_title:*** must be at least 3 characters long
     """
-    requests  = [
-        request.state.tmdb.search_media_by_name(request.state.httpx, media_title, 'movie', request.state.cache),
-        request.state.tmdb.search_media_by_name(request.state.httpx, media_title, 'show',  request.state.cache),
-        request.state.tvdb.search_media_by_name(request.state.httpx, media_title, 'show',  request.state.cache),
-    ]
-    responses = await asyncio.gather(*requests)
-
-    media_search = {
-        'tmdb': responses[2] + responses[3],
-        'tvdb': responses[4]
-    }
-    return media_search
-
-
-@router.get(
-    '/plex/{media_type}',
-    summary        = 'Search into Project: Atlas Database',
-    dependencies   = [Depends(verify_plex_env_variables)],
-    response_model = List[Media],
-    responses      = {
-        HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
-    }
-)
-async def match_plex(
-        request:    Request,
-        media_type: str  = Path(
-            ...,
-            title        = 'Search Type',
-            description  = 'The type of media you are searching for',
-            regex        = '^(movie|show)$'
-        ),
-        media_title: str = Query(
-            ...,
-            title        = 'Search Query',
-            description  = 'The title of media you are searching for',
-            min_length   = 3
-        )
-):
-    """
-    Search for the requested string in the Project: Atlas database.
-
-    Extracts the results from all the items in your Plex library.
-    This searches for both movies and TV shows.
-    It performs spell-checking against your search terms (because KUROSAWA is hard to spell).
-    It also provides contextual search results.
-
-    **Parameters constraints:**
-    - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_title:*** must be at least 3 characters long
-    """
-    return request.state.plex.search_media_by_name(media_title, media_type, request.state.cache)
-
-
-@router.get(
-    '/tmdb/{media_type}',
-    summary        = 'Search into TMDb Database',
-    dependencies   = [Depends(verify_tmdb_env_variables)],
-    response_model = List[Media],
-    responses      = {
-        HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
-    }
-)
-async def search_tmdb(
-        request:    Request,
-        media_type: str   = Path(
-            ...,
-            title         = 'Search Type',
-            description   = 'The type of media you are searching for',
-            regex         = '^(movie|show)$'
-        ),
-        media_title: str  = Query(
-            ...,
-            title         = 'Search Query',
-            description   = 'The title of media you are searching for',
-            min_length    = 3
-        )
-):
-    """
-    Search for the requested string in The Movie DB database.
-
-    Currently supports searching for movies and TV shows in The Movie DB database.
-
-    **Parameters constraints:**
-    - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_title:*** must be at least 3 characters long
-    """
-    return await request.state.tmdb.search_media_by_name(
-        request.state.httpx,
-        media_title.strip(),
-        media_type,
-        request.state.cache
-    )
-
-
-@router.get(
-    '/tvdb/{media_type}',
-    summary        = 'Search into TheTVDB Database',
-    dependencies   = [Depends(verify_tvdb_env_variables)],
-    response_model = List[Media],
-    responses      = {
-        HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
-    }
-)
-async def search_tvdb(
-        request:    Request,
-        media_type: str   = Path(
-            ...,
-            title         = 'Search Type',
-            description   = 'The type of media you are searching for',
-            regex         = '^(movie|show)$'
-        ),
-        media_title: str  = Query(
-            ...,
-            title         = 'Search Query',
-            description   = 'The title of media you are searching for',
-            min_length    = 3
-        )
-):
-    """
-    Search for the requested string in TheTVDB database.
-
-    Currently supports searching for TV shows in TheTVDB database.
-
-    **Parameters constraints:**
-    - ***media_type:*** must be one of: *movie*, *show*
-    - ***media_title:*** must be at least 3 characters long
-    """
-    return await request.state.tvdb.search_media_by_name(
-        request.state.httpx,
-        media_title.strip(),
-        media_type,
-        request.state.cache
-    )
-
-
-@router.get(
-    '/online',
-    summary        = 'Scrape search results from DDL websites',
-    # dependencies   = [Depends(verify_tvdb_env_variables)],
-    # response_model = List[Media],
-    responses      = {
-        HTTP_511_NETWORK_AUTHENTICATION_REQUIRED: {}
-    }
-)
-async def search_online(
-        request:     Request,
-        media_title: str  = Query(
-            ...,
-            title         = 'Search Query',
-            description   = 'The title of media you are searching for',
-            min_length    = 3
-        )
-):
-    """
-    Search for the requested string across multiple DDL websites.
-
-    **Parameters constraints:**
-    - ***media_title:*** must be at least 3 characters long
-    """
-    results = await asyncio.gather(*[ request.state.scraper.do_search(
-        website = website,
-        query   = media_title.strip()
-    ) for website in request.state.scraper.config['sources'] if website['enabled'] ])
-    results = [result for site_results in results for result in site_results]
-    results.sort(key = lambda result: result['date'], reverse = True)
-    results.sort(key = lambda result: result['quality'])
-
-    return results
+    return await request.state.tvdb.search('ita', MediaType.MOVIE if type == 'movie' else MediaType.SHOW if type == 'series' else None, query)
