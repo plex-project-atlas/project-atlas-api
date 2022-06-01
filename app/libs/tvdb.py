@@ -5,7 +5,6 @@ import logging
 from pydantic       import HttpUrl
 from pydantic.tools import parse_obj_as
 from libs.utils     import async_ext_api_call
-from cachetools     import cached, LRUCache, TTLCache
 from libs.models    import MediaType, Media, Movie, Show, ShowStatus
 
 class TVDBClient:
