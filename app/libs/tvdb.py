@@ -52,7 +52,7 @@ class TVDBClient:
             headers     = await self.get_auth_headers(),
             params      = {
                 'query'   : query,
-                'type'    : 'movie' if type == MediaType.MOVIE else ('series' if type == MediaType.SHOW else ''),
+                'type'    : type.value,
                 'language': language
             }
         )
@@ -60,7 +60,10 @@ class TVDBClient:
         if len(response['data']) == 0 and language != 'eng':
             return await self.search('eng', type, query)
 
-        result = [ ]
+        search_result = {
+            'movies': [],
+            'series': []
+        }
         for item in response['data']:
             media = Media(
                 title=item['translations'][language] if 'translations' in item and language in item['translations'] else item['name'],
@@ -68,20 +71,21 @@ class TVDBClient:
                 poster=parse_obj_as(HttpUrl, item['thumbnail']) if 'thumbnail' in item else None,
             )
 
-            result.append(
-                Movie(
+            if item['type'] == 'movie':
+                search_result['movies'].append(Movie(
                     **media.dict() | {
                         'id': f'tvdb://movie/{item["id"]}',
                         'reference_url': parse_obj_as(HttpUrl, f'{self.movies_url_prefix}{item["slug"]}') if 'slug' in item else None,
                         'year': item['year'] if 'year' in item else ''
                     }
-                ) if item['type'] == 'movie' else
-                Show(
+                ) )
+            else:
+                search_result['series'].append(Show(
                     **media.dict() | {
                         'id': f'tvdb://series/{item["id"]}',
                         'reference_url': parse_obj_as(HttpUrl, f'{self.series_url_prefix}{item["slug"]}') if 'slug' in item else None,
                         'status': ShowStatus.FINISHED if not 'status' in item or item['status'] == 'Ended' else ShowStatus.ONGOING if item['status'] == 'Continuing' else ShowStatus.CANCELLED
                     }
-                )
-            )
-        return result
+                ) )
+
+        return search_result

@@ -8,18 +8,21 @@ from fastapi            import FastAPI, HTTPException, Depends
 from libs.tvdb          import TVDBClient
 from routers            import search
 from starlette.requests import Request
-from starlette.status   import HTTP_200_OK, HTTP_500_INTERNAL_SERVER_ERROR
+from starlette.status   import HTTP_200_OK, \
+                               HTTP_500_INTERNAL_SERVER_ERROR, \
+                               HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
+
 
 clients = {}
 
 async def verify_dependencies():
     if not all([
-            os.environ.get('TVDB_USR_PIN'),
-            os.environ.get('TVDB_API_KEY')
-        ]):
+        os.environ.get('TVDB_USR_PIN'),
+        os.environ.get('TVDB_API_KEY')
+    ]):
         raise HTTPException(
-            status_code=HTTP_500_INTERNAL_SERVER_ERROR,
-            detail='Missing TVDB API Tokens'
+            status_code = HTTP_511_NETWORK_AUTHENTICATION_REQUIRED,
+            detail      = '[TVDB] - Missing API authentication'
         )
 
 app = FastAPI(
@@ -31,6 +34,7 @@ app = FastAPI(
     debug        = True,
     dependencies = [ Depends(verify_dependencies) ]
 )
+
 
 @app.on_event('startup')
 async def instantiate_clients():
@@ -57,21 +61,21 @@ async def add_global_vars(request: Request, call_next):
     # await request.state.httpx.aclose()
     return response
 
-@app.get('/')
-def root():
-    a = "a"
-    b = "b" + a
-    return {"hello world": b}
 
+# import the /search branch of PlexAPI
 app.include_router(
-    # import the /match branch of PlexAPI
     search.router,
     prefix    = '/search',
     tags      = ['search'],
     responses = {
-        HTTP_200_OK:        {}
+        HTTP_200_OK: {}
     }
 )
 
+
 if __name__ == '__main__':
-    uvicorn.run(app, host='0.0.0.0', port=8000)
+    uvicorn.run(app,
+        host   = os.environ.get('UVICORN_HOST',   '0.0.0.0'),
+        port   = int( os.environ.get('UVICORN_PORT', '8080') ),
+        #reload = os.environ.get('UVICORN_RELOAD', 'True')
+    )
