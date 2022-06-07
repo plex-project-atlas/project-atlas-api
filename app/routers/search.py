@@ -1,6 +1,6 @@
-from   fastapi             import APIRouter, Depends, Path, Query, HTTPException
-from   typing              import List, Union
-from   libs.models         import SupportedProviders, MediaType, SearchResult
+from   fastapi             import APIRouter, Path, Query
+from   typing              import Any, List, Dict
+from   libs.models         import SupportedProviders, MediaType, SearchResult, Show
 from   starlette.requests  import Request
 from   starlette.status    import HTTP_501_NOT_IMPLEMENTED, \
                                   HTTP_503_SERVICE_UNAVAILABLE, \
@@ -13,16 +13,16 @@ router = APIRouter()
 @router.get(
     '/sources/{source}/types/{type}',
     summary        = 'Search for possible matches for the requested media',
-    response_model = SearchResult
+    response_model = Any
 )
 async def search(
     request: Request,
-    source:  SupportedProviders = Query(
+    source:  SupportedProviders = Path(
         ...,
         title       = 'Source',
         description = 'The online source you are targeting'
     ),
-    type:    MediaType = Query(
+    type:    MediaType = Path(
         ...,
         title       = 'Media Type',
         description = 'The type of the media you are searching for'
@@ -35,12 +35,9 @@ async def search(
     )
 ):
     """
-    Search the requested string across all defined endpoints.
+    Search for the requested media in the selected source.
 
-    Performs a full, asynchronous research across all supported APIs, merges the duplicated results and returns an
-    ordered list
-
-    **Parameters constraints:**
-    - ***media_title:*** must be at least 3 characters long
+    The search is performed in italian, with an automatic fallback to the english language if no results are found.
     """
-    return await request.state.tvdb.search('ita', type, query)
+    return True # Needs a rework to accomodate new models
+    #return await request.state.tvdb.do_search('ita', type, query)

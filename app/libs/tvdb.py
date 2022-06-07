@@ -1,11 +1,16 @@
 import os
+import jq
 import httpx
-import logging
+import asyncio
+import dateparser
 
-from pydantic       import HttpUrl
-from pydantic.tools import parse_obj_as
-from libs.utils     import async_ext_api_call
-from libs.models    import MediaType, Media, Movie, Show, ShowStatus
+from typing           import List
+from pydantic         import HttpUrl
+from pydantic.tools   import parse_obj_as
+from math             import ceil
+from libs.utils       import async_ext_api_call
+from libs.models      import Episode, MediaType, Media, Movie, Show, Season, MovieStatus, ShowStatus
+from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 class TVDBClient:
     series_url_prefix = 'https://thetvdb.com/series/'
@@ -42,7 +47,7 @@ class TVDBClient:
     async def get_auth_headers(self):
         return self.api_headers | { 'Authorization': f'Bearer { await self.get_auth_token() }' }
 
-    async def search(self, language: str, type: MediaType, query: str):
+    async def do_search(self, language: str, type: MediaType, query: str):
         api_endpoint = '/search'
         response = await async_ext_api_call(
             http_client = self.http_client,
@@ -66,15 +71,17 @@ class TVDBClient:
         }
         for item in response['data']:
             media = Media(
-                title=item['translations'][language] if 'translations' in item and language in item['translations'] else item['name'],
-                description=item['overviews'][language] if 'overviews' in item and language in item['overviews'] else item['overview'] if 'overview' in item else '',
-                poster=parse_obj_as(HttpUrl, item['thumbnail']) if 'thumbnail' in item else None,
+                guid        = f'tvdb://tmp/{item["id"]}',
+                source_id   = item['tvdb_id'],
+                title       = item['translations'][language] if 'translations' in item and language in item['translations'] else item['name'],
+                description = item['overviews'][language] if 'overviews' in item and language in item['overviews'] else item['overview'] if 'overview' in item else '',
+                poster      = parse_obj_as(HttpUrl, item['thumbnail']) if 'thumbnail' in item else None,
             )
 
             if item['type'] == 'movie':
                 search_result['movies'].append(Movie(
                     **media.dict() | {
-                        'id': f'tvdb://movie/{item["id"]}',
+                        'guid': f'tvdb://movie/{item["tvdb_id"]}',
                         'reference_url': parse_obj_as(HttpUrl, f'{self.movies_url_prefix}{item["slug"]}') if 'slug' in item else None,
                         'year': item['year'] if 'year' in item else ''
                     }
@@ -82,10 +89,159 @@ class TVDBClient:
             else:
                 search_result['series'].append(Show(
                     **media.dict() | {
-                        'id': f'tvdb://series/{item["id"]}',
+                        'guid': f'tvdb://series/{item["tvdb_id"]}',
                         'reference_url': parse_obj_as(HttpUrl, f'{self.series_url_prefix}{item["slug"]}') if 'slug' in item else None,
                         'status': ShowStatus.FINISHED if not 'status' in item or item['status'] == 'Ended' else ShowStatus.ONGOING if item['status'] == 'Continuing' else ShowStatus.CANCELLED
                     }
                 ) )
 
         return search_result
+
+    async def get_movie(self, id: int) -> Movie:
+        api_endpoint = f'/movies/{id}/extended'
+        response = await async_ext_api_call(
+            http_client = self.http_client,
+            url         = parse_obj_as(HttpUrl, self.api_url + api_endpoint),
+            method      = httpx.AsyncClient.get,
+            caller      = "TVDB",
+            headers     = await self.get_auth_headers(),
+            params      = {
+                'meta':  'translations',
+                'short': 'true'
+            }
+        )
+        return Movie(
+            guid       = f'tvdb://movie/{response["data"]["id"]}',
+            source_id  = int(response["data"]["id"]),
+            source_url = parse_obj_as(HttpUrl, f'{self.movies_url_prefix}{response["data"]["slug"]}') if 'slug' in response["data"] else None,
+            title      = next(
+                (translation for translation in response["data"]["translations"]["nameTranslations"] if translation["language"] == "ita"),
+                next(
+                    (translation for translation in response["data"]["translations"]["nameTranslations"] if translation["language"] == "eng"),
+                    {"name": response["data"]["name"]}
+                )
+            )["name"],
+            overview   = next(
+                (translation for translation in response["data"]["translations"]["overviewTranslations"] if translation["language"] == "ita"),
+                next(
+                    (translation for translation in response["data"]["translations"]["overviewTranslations"] if translation["language"] == "eng"),
+                    {"overview": None}
+                )
+            )["overview"],
+            image      = parse_obj_as(HttpUrl, response["data"]["image"]) if 'image' in response["data"] else None,
+            airdate    = dateparser.parse(response["data"]["first_release"]["date"]).date() if 'date' in response["data"]["first_release"] else None,
+            runtime    = response["data"]["runtime"] if response["data"]["runtime"] else None,
+            status     = MovieStatus.ANNOUNCED       if response["data"]["status"]["id"] == 1 else \
+                         MovieStatus.PRE_PRODUCTION  if response["data"]["status"]["id"] == 2 else \
+                         MovieStatus.POST_PRODUCTION if response["data"]["status"]["id"] == 3 else \
+                         MovieStatus.COMPLETED       if response["data"]["status"]["id"] == 4 else \
+                         MovieStatus.RELEASED        if response["data"]["status"]["id"] == 5 else None
+        )
+
+    async def get_show(self, id: int) -> Show:
+        api_endpoint = f'/series/{id}/extended'
+        response = await async_ext_api_call(
+            http_client = self.http_client,
+            url         = parse_obj_as(HttpUrl, self.api_url + api_endpoint),
+            method      = httpx.AsyncClient.get,
+            caller      = "TVDB",
+            headers     = await self.get_auth_headers(),
+            params      = {
+                'meta':  'translations',
+                'short': 'true'
+            }
+        )
+        return Show(
+            guid       = f'tvdb://series/{response["data"]["id"]}',
+            source_id  = int(response["data"]["id"]),
+            source_url = parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["slug"]}') if 'slug' in response["data"] else None,
+            title      = next(
+                (translation for translation in response["data"]["translations"]["nameTranslations"] if translation["language"] == "ita"),
+                next(
+                    (translation for translation in response["data"]["translations"]["nameTranslations"] if translation["language"] == "eng"),
+                    {"name": response["data"]["name"]}
+                )
+            )["name"],
+            overview   = next(
+                (translation for translation in response["data"]["translations"]["overviewTranslations"] if translation["language"] == "ita"),
+                next(
+                    (translation for translation in response["data"]["translations"]["overviewTranslations"] if translation["language"] == "eng"),
+                    {"overview": None}
+                )
+            )["overview"],
+            image      = parse_obj_as(HttpUrl, response["data"]["image"]) if 'image' in response["data"] else None,
+            airdate    = dateparser.parse(response["data"]["firstAired"]).date() if response["data"]["firstAired"] else None,
+            status     = ShowStatus.UPCOMING if response["data"]["status"]["id"] == 3 else \
+                         ShowStatus.ONGOING  if response["data"]["status"]["id"] == 1 else \
+                         ShowStatus.ENDED    if response["data"]["status"]["id"] == 2 else None,
+            seasons    = await self.get_seasons(id = response["data"]["id"])
+        )
+
+    async def get_seasons(self, id: int, season_type: str = 'official', language: str = None, page: int = 0) -> List[Season]:
+        jq_season_parser = '''[ .data.episodes | group_by(.seasonNumber)[] | {
+            guid:     ( "tvdb://series/" + (.[0].seriesId | tostring) + "/seasons/" + (.[0].seasonNumber | tostring) ),
+            number:   .[0].seasonNumber,
+            episodes: [ .[] | {
+                guid:       ( "tvdb://series/" + (.seriesId | tostring) + "/episodes/" + (.id | tostring) ),
+                source_id:  (.id | tonumber),
+                source_url: ( "/episodes/" + (.id | tostring) ),
+                number:     .number,
+                title:      .name,
+                overview:   .overview,
+                image:      .image,
+                airdate:    .aired,
+                runtime:    .runtime
+            } ]
+        } ]'''
+
+        api_endpoint = f'/series/{id}/episodes/{season_type}'
+        if language:
+            api_endpoint += f'/{language}'
+
+        response = await async_ext_api_call(
+            http_client = self.http_client,
+            url         = parse_obj_as(HttpUrl, self.api_url + api_endpoint),
+            method      = httpx.AsyncClient.get,
+            caller      = "TVDB",
+            headers     = await self.get_auth_headers(),
+            params      = {
+                'page': page
+            }
+        )
+        tmp_seasons = jq.compile(jq_season_parser).input(response).first()
+
+        seasons = []
+        for tmp_season in tmp_seasons:
+            episodes = []
+            for tmp_episode in tmp_season["episodes"]:
+                episodes.append( Episode( **tmp_episode | {
+                    "source_url": parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}{tmp_episode["source_url"]}') if response["data"]["series"]["slug"] else None,
+                    "title":      tmp_episode["title"] if tmp_episode["title"] else '',
+                    "image":      parse_obj_as(HttpUrl, tmp_episode["image"]) if tmp_episode["image"] else None,
+                    "airdate":    dateparser.parse(tmp_episode["airdate"]).date() if tmp_episode["airdate"] else None
+                } ) )
+            seasons.append( Season( **tmp_season | {
+                "episodes": episodes
+            } ) )
+
+        if page == 0 and (response["links"]["total_items"] / response["links"]["page_size"]) > 1:
+            requests = []
+            for i in range( 1, ceil(response["links"]["total_items"] / response["links"]["page_size"]) ):
+                requests.append( self.get_seasons(id = id, season_type = season_type, language = language, page = i) )
+            all_pages = await asyncio.gather(*requests)
+            all_pages = [item for single_page in all_pages for item in single_page] + seasons
+
+            seasons = []
+            for tmp_season in all_pages:
+                index = next((i for i, season in enumerate(seasons) if season.guid == tmp_season.guid), None)
+                if not index:
+                    seasons.append(tmp_season)
+                else:
+                    seasons[index].episodes += tmp_season.episodes
+
+            # order seasons and episodes by number
+            for season in seasons:
+                season.episodes = sorted(season.episodes, key = lambda ep: ep.number)
+            seasons = sorted(seasons, key = lambda sn: sn.number)
+
+        return seasons

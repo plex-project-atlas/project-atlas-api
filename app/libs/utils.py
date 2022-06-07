@@ -25,7 +25,7 @@ async def async_ext_api_call(
     while tries:
         try:
             if len(kwargs.get('params', [ ])) > 0:
-                url_encoded=f'{url}?{"&".join(["=".join([key, urllib.parse.quote(value.encode("utf-8"))]) for key, value in kwargs["params"].items()])}'
+                url_encoded=f'{url}?{"&".join(["=".join([key, urllib.parse.quote(str(value).encode("utf-8"))]) for key, value in kwargs["params"].items()])}'
                 logging.error(f'[{caller}] - An external API endpoint is beeing called: {url_encoded}')
             else:
                 logging.error(f'[{caller}] - An external API endpoint is beeing called: {url}')
@@ -59,5 +59,5 @@ async def async_ext_api_call(
 
     if tries == 0:
         raise exception
-        
+
     return response

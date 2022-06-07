@@ -3,10 +3,11 @@ import time
 import httpx
 import uvicorn
 import logging
+import warnings
 
 from fastapi            import FastAPI, HTTPException, Depends
 from libs.tvdb          import TVDBClient
-from routers            import search
+from routers            import search, details
 from starlette.requests import Request
 from starlette.status   import HTTP_200_OK, \
                                HTTP_500_INTERNAL_SERVER_ERROR, \
@@ -72,8 +73,23 @@ app.include_router(
     }
 )
 
+# import the /details branch of PlexAPI
+app.include_router(
+    details.router,
+    prefix    = '/details',
+    tags      = ['details'],
+    responses = {
+        HTTP_200_OK: {}
+    }
+)
+
 
 if __name__ == '__main__':
+    # WORKAROUND for https://github.com/scrapinghub/dateparser/issues/1013
+    warnings.filterwarnings(
+        "ignore",
+        message = "The localize method is no longer necessary, as this time zone supports the fold attribute",
+    )
     uvicorn.run(app,
         host   = os.environ.get('UVICORN_HOST',   '0.0.0.0'),
         port   = int( os.environ.get('UVICORN_PORT', '8080') ),
