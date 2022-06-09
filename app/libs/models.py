@@ -73,7 +73,7 @@ class Show(Media):
     @validator('guid')
     def guid_format(cls, guid):
         if not re.match(r'^(tmdb|tvdb):\/\/series\/\d+$', guid):
-            raise ValueError('[Media] - Wrong episode GUID.')
+            raise ValueError('[Media] - Wrong show GUID.')
         return guid
 
 class SearchResult(BaseModel):

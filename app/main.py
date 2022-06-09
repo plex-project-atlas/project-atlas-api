@@ -16,6 +16,7 @@ from starlette.status   import HTTP_200_OK, \
 
 clients = {}
 
+
 async def verify_dependencies():
     if not all([
         os.environ.get('TVDB_USR_PIN'),
@@ -91,7 +92,7 @@ if __name__ == '__main__':
         message = "The localize method is no longer necessary, as this time zone supports the fold attribute",
     )
     uvicorn.run(app,
-        host   = os.environ.get('UVICORN_HOST',   '0.0.0.0'),
+        host   = os.environ.get('UVICORN_HOST',      '0.0.0.0'),
         port   = int( os.environ.get('UVICORN_PORT', '8080') ),
         #reload = os.environ.get('UVICORN_RELOAD', 'True')
     )

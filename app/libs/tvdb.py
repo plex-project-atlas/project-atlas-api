@@ -47,7 +47,7 @@ class TVDBClient:
     async def get_auth_headers(self):
         return self.api_headers | { 'Authorization': f'Bearer { await self.get_auth_token() }' }
 
-    async def do_search(self, language: str, type: MediaType, query: str):
+    async def do_search(self, query: str, type: MediaType = None):
         api_endpoint = '/search'
         response = await async_ext_api_call(
             http_client = self.http_client,
@@ -57,41 +57,53 @@ class TVDBClient:
             headers     = await self.get_auth_headers(),
             params      = {
                 'query'   : query,
-                'type'    : type.value,
-                'language': language
-            }
+                'type'    : type.value
+            } if type else {'query': query}
         )
-
-        if len(response['data']) == 0 and language != 'eng':
-            return await self.search('eng', type, query)
 
         search_result = {
             'movies': [],
             'series': []
         }
-        for item in response['data']:
+        for item in response["data"]:
+            if not item["type"] in ["movie", "series"]:
+                continue
+
             media = Media(
-                guid        = f'tvdb://tmp/{item["id"]}',
-                source_id   = item['tvdb_id'],
-                title       = item['translations'][language] if 'translations' in item and language in item['translations'] else item['name'],
-                description = item['overviews'][language] if 'overviews' in item and language in item['overviews'] else item['overview'] if 'overview' in item else '',
-                poster      = parse_obj_as(HttpUrl, item['thumbnail']) if 'thumbnail' in item else None,
+                guid      = f'tvdb://{item["type"]}/{item["tvdb_id"]}',
+                source_id = int(item["tvdb_id"]),
+                title     = item["translations"]["ita"] if "translations" in item and "ita" in item["translations"]  else \
+                            item["translations"]["eng"] if "translations" in item and "eng" in item["translations"]  else item["name"],
+                overview  = item["overviews"]["ita"]    if "overviews"    in item and "ita" in item["overviews"]     else \
+                            item["overviews"]["eng"]    if "overviews"    in item and "eng" in item["overviews"]     else \
+                            item["overview"]            if "overview"     in item else None,
+                image     = parse_obj_as(HttpUrl, item['thumbnail']) if "thumbnail" in item and item["thumbnail"] else parse_obj_as(HttpUrl, item["image_url"]),
+                airdate   = dateparser.parse(item["first_air_time"]).date()  if "first_air_time" in item and item["first_air_time"] else \
+                            dateparser.parse("01/01/" + item["year"]).date() if "year"           in item and item["year"]           else None
             )
 
-            if item['type'] == 'movie':
-                search_result['movies'].append(Movie(
+            if item["type"] == "movie":
+                search_result["movies"].append(Movie(
                     **media.dict() | {
-                        'guid': f'tvdb://movie/{item["tvdb_id"]}',
-                        'reference_url': parse_obj_as(HttpUrl, f'{self.movies_url_prefix}{item["slug"]}') if 'slug' in item else None,
-                        'year': item['year'] if 'year' in item else ''
+                        'source_url': parse_obj_as(HttpUrl, f'{self.movies_url_prefix}{item["slug"]}') if "slug" in item and item["slug"] else None,
+                        'status':     (
+                            MovieStatus.ANNOUNCED       if item["status"].lower() in MovieStatus.ANNOUNCED.value.lower()       else \
+                            MovieStatus.PRE_PRODUCTION  if item["status"].lower() in MovieStatus.PRE_PRODUCTION.value.lower()  else \
+                            MovieStatus.POST_PRODUCTION if item["status"].lower() in MovieStatus.POST_PRODUCTION.value.lower() else \
+                            MovieStatus.COMPLETED       if item["status"].lower() in MovieStatus.COMPLETED.value.lower()       else \
+                            MovieStatus.RELEASED        if item["status"].lower() in MovieStatus.RELEASED.value.lower()        else None
+                        ) if "status" in item and item["status"] else None
                     }
                 ) )
             else:
-                search_result['series'].append(Show(
+                search_result["series"].append(Show(
                     **media.dict() | {
-                        'guid': f'tvdb://series/{item["tvdb_id"]}',
-                        'reference_url': parse_obj_as(HttpUrl, f'{self.series_url_prefix}{item["slug"]}') if 'slug' in item else None,
-                        'status': ShowStatus.FINISHED if not 'status' in item or item['status'] == 'Ended' else ShowStatus.ONGOING if item['status'] == 'Continuing' else ShowStatus.CANCELLED
+                        'source_url': parse_obj_as(HttpUrl, f'{self.series_url_prefix}{item["slug"]}') if "slug" in item and item["slug"] else None,
+                        'status':     (
+                            ShowStatus.UPCOMING if item["status"].lower() in ShowStatus.UPCOMING.value.lower() else \
+                            ShowStatus.ONGOING  if item["status"].lower() in ShowStatus.ONGOING.value.lower()  else \
+                            ShowStatus.ENDED    if item["status"].lower() in ShowStatus.ENDED.value.lower()    else None
+                        ) if "status" in item  and item["status"] else None
                     }
                 ) )
 

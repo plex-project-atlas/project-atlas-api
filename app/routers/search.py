@@ -1,43 +1,47 @@
-from   fastapi             import APIRouter, Path, Query
+import logging
+
+from   fastapi             import APIRouter, Path, Query, HTTPException
 from   typing              import Any, List, Dict
 from   libs.models         import SupportedProviders, MediaType, SearchResult, Show
 from   starlette.requests  import Request
-from   starlette.status    import HTTP_501_NOT_IMPLEMENTED, \
-                                  HTTP_503_SERVICE_UNAVAILABLE, \
-                                  HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
+from   starlette.status    import HTTP_501_NOT_IMPLEMENTED
 
 
 router = APIRouter()
 
 
 @router.get(
-    '/sources/{source}/types/{type}',
+    '/sources/{source}',
     summary        = 'Search for possible matches for the requested media',
-    response_model = Any
+    response_model = SearchResult
 )
 async def search(
     request: Request,
     source:  SupportedProviders = Path(
-        ...,
+        default     = ...,
         title       = 'Source',
         description = 'The online source you are targeting'
     ),
-    type:    MediaType = Path(
-        ...,
+    query:   str = Query(
+        default     = ...,
+        title       = 'Search Query',
+        description = 'The title of media you are searching for',
+        min_length  = 3
+    ),
+    type:    MediaType = Query(
+        default     = None,
         title       = 'Media Type',
         description = 'The type of the media you are searching for'
-    ),
-    query:   str = Query(
-        ...,
-        title        = 'Search Query',
-        description  = 'The title of media you are searching for',
-        min_length   = 3
     )
 ):
     """
     Search for the requested media in the selected source.
 
-    The search is performed in italian, with an automatic fallback to the english language if no results are found.
+    The search is performed in italian, with an automatic fallback to the english or native language if no results are found.
     """
-    return True # Needs a rework to accomodate new models
-    #return await request.state.tvdb.do_search('ita', type, query)
+    if source == SupportedProviders.THE_TV_DB:
+        return await request.state.tvdb.do_search(query = query, type = type)
+
+    detail = '[PlexAPI] - Function not yet implemented.'
+    logging.error(detail)
+    return HTTPException(status_code = HTTP_501_NOT_IMPLEMENTED, detail = detail)

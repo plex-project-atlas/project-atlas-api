@@ -20,14 +20,14 @@ router = APIRouter()
 async def get_movie_details(
     request: Request,
     source:  SupportedProviders = Path(
-        ...,
+        default     = ...,
         title       = 'Source',
         description = 'The online source you are targeting'
     ),
     id:      int = Path(
-        ...,
-        title        = 'Media ID',
-        description  = 'The specific ID of the movie within the selected source'
+        default     = ...,
+        title       = 'Media ID',
+        description = 'The specific ID of the movie within the selected source'
     )
 ):
     """
