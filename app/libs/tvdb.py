@@ -102,6 +102,7 @@ class TVDBClient:
                         'status':     (
                             ShowStatus.UPCOMING if item["status"].lower() in ShowStatus.UPCOMING.value.lower() else \
                             ShowStatus.ONGOING  if item["status"].lower() in ShowStatus.ONGOING.value.lower()  else \
+                            ShowStatus.ONGOING  if item["status"].lower() in "Continuing"                      else \
                             ShowStatus.ENDED    if item["status"].lower() in ShowStatus.ENDED.value.lower()    else None
                         ) if "status" in item  and item["status"] else None
                     }
