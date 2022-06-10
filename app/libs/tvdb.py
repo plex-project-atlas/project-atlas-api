@@ -9,7 +9,7 @@ from pydantic         import HttpUrl
 from pydantic.tools   import parse_obj_as
 from math             import ceil
 from libs.utils       import async_ext_api_call
-from libs.models      import Episode, MediaType, Media, Movie, Show, Season, MovieStatus, ShowStatus
+from libs.models      import Episode, MediaType, Media, Movie, SearchResult, Show, Season, MovieStatus, ShowStatus
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 class TVDBClient:
@@ -47,7 +47,7 @@ class TVDBClient:
     async def get_auth_headers(self):
         return self.api_headers | { 'Authorization': f'Bearer { await self.get_auth_token() }' }
 
-    async def do_search(self, query: str, type: MediaType = None):
+    async def do_search(self, query: str, type: MediaType = None) -> SearchResult:
         api_endpoint = '/search'
         response = await async_ext_api_call(
             http_client = self.http_client,
@@ -77,7 +77,7 @@ class TVDBClient:
                 overview  = item["overviews"]["ita"]    if "overviews"    in item and "ita" in item["overviews"]     else \
                             item["overviews"]["eng"]    if "overviews"    in item and "eng" in item["overviews"]     else \
                             item["overview"]            if "overview"     in item else None,
-                image     = parse_obj_as(HttpUrl, item['thumbnail']) if "thumbnail" in item and item["thumbnail"] else parse_obj_as(HttpUrl, item["image_url"]),
+                image     = parse_obj_as(HttpUrl, item["thumbnail"]) if "thumbnail" in item and item["thumbnail"] else parse_obj_as(HttpUrl, item["image_url"]),
                 airdate   = dateparser.parse(item["first_air_time"]).date()  if "first_air_time" in item and item["first_air_time"] else \
                             dateparser.parse("01/01/" + item["year"]).date() if "year"           in item and item["year"]           else None
             )
@@ -102,7 +102,7 @@ class TVDBClient:
                         'status':     (
                             ShowStatus.UPCOMING if item["status"].lower() in ShowStatus.UPCOMING.value.lower() else \
                             ShowStatus.ONGOING  if item["status"].lower() in ShowStatus.ONGOING.value.lower()  else \
-                            ShowStatus.ONGOING  if item["status"].lower() in "Continuing"                      else \
+                            ShowStatus.ONGOING  if item["status"].lower() in "Continuing".lower()              else \
                             ShowStatus.ENDED    if item["status"].lower() in ShowStatus.ENDED.value.lower()    else None
                         ) if "status" in item  and item["status"] else None
                     }
@@ -242,7 +242,7 @@ class TVDBClient:
             for i in range( 1, ceil(response["links"]["total_items"] / response["links"]["page_size"]) ):
                 requests.append( self.get_seasons(id = id, season_type = season_type, language = language, page = i) )
             all_pages = await asyncio.gather(*requests)
-            all_pages = [item for single_page in all_pages for item in single_page] + seasons
+            all_pages = seasons + [item for single_page in all_pages for item in single_page]
 
             seasons = []
             for tmp_season in all_pages:

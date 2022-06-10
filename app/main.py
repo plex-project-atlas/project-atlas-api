@@ -7,6 +7,7 @@ import warnings
 
 from fastapi            import FastAPI, HTTPException, Depends
 from libs.tvdb          import TVDBClient
+from libs.tmdb          import TMDBClient
 from routers            import search, details
 from starlette.requests import Request
 from starlette.status   import HTTP_200_OK, \
@@ -51,11 +52,14 @@ async def instantiate_clients():
     )
     logging.info('[FastAPI] - Initializing TVDB client...')
     clients['tvdb'] = TVDBClient(clients['httpx'])
+    logging.info('[FastAPI] - Initializing TMDB client...')
+    clients['tmdb'] = TMDBClient(clients['httpx'])
 
 @app.middleware('http')
 async def add_global_vars(request: Request, call_next):
     request.state.httpx = clients['httpx']
     request.state.tvdb  = clients['tvdb']
+    request.state.tmdb  = clients['tmdb']
 
     start_time = time.time()
     response = await call_next(request)

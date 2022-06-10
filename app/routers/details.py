@@ -37,6 +37,8 @@ async def get_movie_details(
     """
     if   source == SupportedProviders.THE_TV_DB:
         return await request.state.tvdb.get_movie(id = id)
+    elif source == SupportedProviders.THE_MOVIE_DB:
+        return await request.state.tmdb.get_movie(id = id)
     else:
         detail = '[PlexAPI] - Unsupported source selected.'
         logging.error(detail)
@@ -67,6 +69,8 @@ async def get_show_details(
     """
     if   source == SupportedProviders.THE_TV_DB:
         return await request.state.tvdb.get_show(id = id)
+    elif source == SupportedProviders.THE_MOVIE_DB:
+        return await request.state.tmdb.get_show(id = id)
     else:
         detail = '[PlexAPI] - Unsupported source selected.'
         logging.error(detail)

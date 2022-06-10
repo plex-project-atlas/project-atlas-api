@@ -15,11 +15,13 @@ class MediaType(str, Enum):
     SERIES = 'series'
 
 class MovieStatus(str, Enum):
+    RUMORED         = 'Rumored'
     ANNOUNCED       = 'Announced'
     PRE_PRODUCTION  = 'Pre-Production'
     POST_PRODUCTION = 'Filming / Post-Production'
     COMPLETED       = 'Completed'
     RELEASED        = 'Released'
+    CANCELED        = 'Canceled'
 
 class ShowStatus(str, Enum):
     UPCOMING = 'Upcoming'
@@ -55,10 +57,17 @@ class Episode(Media):
             raise ValueError('[Media] - Wrong episode GUID.')
         return guid
 
+# Does not inherit from [Media] since many fields are optional
 class Season(BaseModel):
-    guid:     str
-    number:   int
-    episodes: List[Episode]
+    guid:       str
+    source_id:  int     = None
+    source_url: HttpUrl = None
+    title:      str     = None
+    overview:   str     = None
+    image:      HttpUrl = None
+    airdate:    date    = None
+    number:     int
+    episodes:   List[Episode]
 
     @validator('guid')
     def guid_format(cls, guid):

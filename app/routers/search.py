@@ -39,8 +39,10 @@ async def search(
 
     The search is performed in italian, with an automatic fallback to the english or native language if no results are found.
     """
-    if source == SupportedProviders.THE_TV_DB:
+    if   source == SupportedProviders.THE_TV_DB:
         return await request.state.tvdb.do_search(query = query, type = type)
+    elif source == SupportedProviders.THE_MOVIE_DB:
+        return await request.state.tmdb.do_search(query = query, type = type)
 
     detail = '[PlexAPI] - Function not yet implemented.'
     logging.error(detail)
