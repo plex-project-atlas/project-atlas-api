@@ -1,3 +1,4 @@
+from ast import Param
 import os
 import jq
 import httpx
@@ -9,7 +10,8 @@ from pydantic         import HttpUrl
 from pydantic.tools   import parse_obj_as
 from math             import ceil
 from libs.utils       import async_ext_api_call
-from libs.models      import Episode, MediaType, Media, Movie, SearchResult, Show, Season, MovieStatus, ShowStatus
+from libs.models      import MediaType, Media, Movie, Show, Season, Episode, \
+                             SearchResult, MovieStatus, ShowStatus, SeasonType
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 
 class TVDBClient:
@@ -151,7 +153,78 @@ class TVDBClient:
                          MovieStatus.RELEASED        if response["data"]["status"]["id"] == 5 else None
         )
 
-    async def get_show(self, id: int) -> Show:
+    async def get_show(self, id: int, season_type: SeasonType = SeasonType.OFFICIAL, with_episodes: bool = False) -> Show:
+        async def get_seasons(show_id: int, season_type: SeasonType, language: str = None, page: int = 0) -> List[Season]:
+            jq_season_parser = '''[ .data.episodes | group_by(.seasonNumber)[] | {
+                guid:     ( "tvdb://series/" + (.[0].seriesId | tostring) + "/seasons/" + (.[0].seasonNumber | tostring) ),
+                number:   .[0].seasonNumber,
+                episodes: [ .[] | {
+                    guid:       ( "tvdb://series/" + (.seriesId | tostring) + "/episodes/" + (.id | tostring) ),
+                    source_id:  (.id | tonumber),
+                    source_url: ( "/episodes/" + (.id | tostring) ),
+                    title:      .name,
+                    overview:   .overview,
+                    image:      .image,
+                    airdate:    .aired,
+                    number:     .number,
+                    runtime:    .runtime
+                } ]
+            } ]'''
+
+            api_endpoint = f'/series/{id}/episodes/{season_type}'
+            if language:
+                api_endpoint += f'/{language}'
+
+            response = await async_ext_api_call(
+                http_client = self.http_client,
+                url         = parse_obj_as(HttpUrl, self.api_url + api_endpoint),
+                method      = httpx.AsyncClient.get,
+                caller      = "TVDB",
+                headers     = await self.get_auth_headers(),
+                params      = {
+                    'page': page
+                }
+            )
+            tmp_seasons = jq.compile(jq_season_parser).input(response).first()
+
+            seasons = []
+            for tmp_season in tmp_seasons:
+                episodes = []
+                for tmp_episode in tmp_season["episodes"]:
+                    episodes.append( Episode( **tmp_episode | {
+                        "source_url": parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}{tmp_episode["source_url"]}'),
+                        "title":      tmp_episode["title"]    if tmp_episode["title"]    else "",
+                        "overview":   tmp_episode["overview"] if tmp_episode["overview"] else None,
+                        "image":      parse_obj_as(HttpUrl, tmp_episode["image"])     if tmp_episode["image"]   else None,
+                        "airdate":    dateparser.parse(tmp_episode["airdate"]).date() if tmp_episode["airdate"] else None
+                    } ) )
+                seasons.append( Season( **tmp_season | {
+                    "source_url": parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}/seasons/{season_type.value.lower()}/{tmp_season["number"]}'),
+                    "episodes":   episodes
+                } ) )
+
+            if page == 0 and (response["links"]["total_items"] / response["links"]["page_size"]) > 1:
+                requests = []
+                for i in range( 1, ceil(response["links"]["total_items"] / response["links"]["page_size"]) ):
+                    requests.append( self.get_seasons(id = id, season_type = season_type, language = language, page = i) )
+                all_pages = await asyncio.gather(*requests)
+                all_pages = seasons + [item for single_page in all_pages for item in single_page]
+
+                seasons = []
+                for tmp_season in all_pages:
+                    index = next((i for i, season in enumerate(seasons) if season.guid == tmp_season.guid), None)
+                    if not index:
+                        seasons.append(tmp_season)
+                    else:
+                        seasons[index].episodes += tmp_season.episodes
+
+                # order seasons and episodes by number
+                for season in seasons:
+                    season.episodes = sorted(season.episodes, key = lambda ep: ep.number)
+                seasons = sorted(seasons, key = lambda sn: sn.number)
+
+            return seasons
+
         api_endpoint = f'/series/{id}/extended'
         response = await async_ext_api_call(
             http_client = self.http_client,
@@ -164,6 +237,33 @@ class TVDBClient:
                 'short': 'true'
             }
         )
+
+        seasons = []
+        for season in response["data"]["seasons"]:
+            if not season["type"]["type"].lower() == season_type.value.lower():
+                continue
+            seasons.append( Season(
+                guid       = f'tvdb://series/{id}/seasons/{season["id"]}',
+                source_id  = int(season["id"]),
+                source_url = parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["slug"]}/seasons/{season_type.value.lower()}/{season["number"]}'),
+                image      = parse_obj_as(HttpUrl, season["image"]) \
+                             if "image" in season and season["image"] else None,
+                number     = int(season["number"]),
+                episodes   = []
+            ) )
+        # ensure seasons are ordered by number
+        seasons = sorted( seasons, key = lambda sn: int(sn.number) )
+
+        if with_episodes:
+            ep_seasons = await get_seasons(show_id = id, season_type = season_type)
+            for season in seasons:
+                for ep_season in ep_seasons:
+                    if ep_season.source_url == season.source_url:
+                        season.episodes = ep_season.episodes
+                        if not season.airdate and ep_season.episodes[0].airdate:
+                            season.airdate = ep_season.episodes[0].airdate
+                        break
+
         return Show(
             guid       = f'tvdb://series/{response["data"]["id"]}',
             source_id  = int(response["data"]["id"]),
@@ -187,74 +287,5 @@ class TVDBClient:
             status     = ShowStatus.UPCOMING if response["data"]["status"]["id"] == 3 else \
                          ShowStatus.ONGOING  if response["data"]["status"]["id"] == 1 else \
                          ShowStatus.ENDED    if response["data"]["status"]["id"] == 2 else None,
-            seasons    = await self.get_seasons(id = response["data"]["id"])
+            seasons    = seasons
         )
-
-    async def get_seasons(self, id: int, season_type: str = 'official', language: str = None, page: int = 0) -> List[Season]:
-        jq_season_parser = '''[ .data.episodes | group_by(.seasonNumber)[] | {
-            guid:     ( "tvdb://series/" + (.[0].seriesId | tostring) + "/seasons/" + (.[0].seasonNumber | tostring) ),
-            number:   .[0].seasonNumber,
-            episodes: [ .[] | {
-                guid:       ( "tvdb://series/" + (.seriesId | tostring) + "/episodes/" + (.id | tostring) ),
-                source_id:  (.id | tonumber),
-                source_url: ( "/episodes/" + (.id | tostring) ),
-                number:     .number,
-                title:      .name,
-                overview:   .overview,
-                image:      .image,
-                airdate:    .aired,
-                runtime:    .runtime
-            } ]
-        } ]'''
-
-        api_endpoint = f'/series/{id}/episodes/{season_type}'
-        if language:
-            api_endpoint += f'/{language}'
-
-        response = await async_ext_api_call(
-            http_client = self.http_client,
-            url         = parse_obj_as(HttpUrl, self.api_url + api_endpoint),
-            method      = httpx.AsyncClient.get,
-            caller      = "TVDB",
-            headers     = await self.get_auth_headers(),
-            params      = {
-                'page': page
-            }
-        )
-        tmp_seasons = jq.compile(jq_season_parser).input(response).first()
-
-        seasons = []
-        for tmp_season in tmp_seasons:
-            episodes = []
-            for tmp_episode in tmp_season["episodes"]:
-                episodes.append( Episode( **tmp_episode | {
-                    "source_url": parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}{tmp_episode["source_url"]}') if response["data"]["series"]["slug"] else None,
-                    "title":      tmp_episode["title"] if tmp_episode["title"] else '',
-                    "image":      parse_obj_as(HttpUrl, tmp_episode["image"]) if tmp_episode["image"] else None,
-                    "airdate":    dateparser.parse(tmp_episode["airdate"]).date() if tmp_episode["airdate"] else None
-                } ) )
-            seasons.append( Season( **tmp_season | {
-                "episodes": episodes
-            } ) )
-
-        if page == 0 and (response["links"]["total_items"] / response["links"]["page_size"]) > 1:
-            requests = []
-            for i in range( 1, ceil(response["links"]["total_items"] / response["links"]["page_size"]) ):
-                requests.append( self.get_seasons(id = id, season_type = season_type, language = language, page = i) )
-            all_pages = await asyncio.gather(*requests)
-            all_pages = seasons + [item for single_page in all_pages for item in single_page]
-
-            seasons = []
-            for tmp_season in all_pages:
-                index = next((i for i, season in enumerate(seasons) if season.guid == tmp_season.guid), None)
-                if not index:
-                    seasons.append(tmp_season)
-                else:
-                    seasons[index].episodes += tmp_season.episodes
-
-            # order seasons and episodes by number
-            for season in seasons:
-                season.episodes = sorted(season.episodes, key = lambda ep: ep.number)
-            seasons = sorted(seasons, key = lambda sn: sn.number)
-
-        return seasons

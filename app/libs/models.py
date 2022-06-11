@@ -14,6 +14,15 @@ class MediaType(str, Enum):
     MOVIE  = 'movie'
     SERIES = 'series'
 
+class SeasonType(str, Enum):
+    DEFAULT   = 'default'
+    OFFICIAL  = 'official'
+    DVD       = 'dvd'
+    ABSOLUTE  = 'absolute'
+    ALTERNATE = 'alternate'
+    REGIONAL  = 'regional'
+    ALT_DVD   = 'altdvd'
+
 class MovieStatus(str, Enum):
     RUMORED         = 'Rumored'
     ANNOUNCED       = 'Announced'

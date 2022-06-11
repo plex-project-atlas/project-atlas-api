@@ -176,7 +176,7 @@ class TMDBClient:
         )
 
     async def get_show(self, id: int, language: str = 'it-IT', with_episodes: bool = False) -> Show:
-        async def get_episodes(show_id: int, number: int, language: str = 'it-IT', api_configs: dict = None) -> List[Episode]:
+        async def get_episodes(show_id: int, number: int, language: str, api_configs: dict = None) -> List[Episode]:
             api_endpoint = f'/tv/{show_id}/season/{number}'
             response = await async_ext_api_call(
                 http_client = self.http_client,

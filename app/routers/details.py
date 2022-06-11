@@ -73,7 +73,7 @@ async def get_show_details(
     The search is performed in italian, with an automatic fallback to the english or native language if no results are found.
     """
     if   source == SupportedProviders.THE_TV_DB:
-        return await request.state.tvdb.get_show(id = id)
+        return await request.state.tvdb.get_show(id = id, with_episodes = with_episodes)
     elif source == SupportedProviders.THE_MOVIE_DB:
         return await request.state.tmdb.get_show(id = id, with_episodes = with_episodes)
     else:
