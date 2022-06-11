@@ -1,6 +1,6 @@
 import logging
 
-from   fastapi             import APIRouter, Path, HTTPException
+from   fastapi             import APIRouter, Path, HTTPException, Query
 from   typing              import Dict
 from   libs.models         import Movie, Show, SupportedProviders, MediaType
 from   starlette.requests  import Request
@@ -24,7 +24,7 @@ async def get_movie_details(
         title       = 'Source',
         description = 'The online source you are targeting'
     ),
-    id:      int = Path(
+    id: int = Path(
         default     = ...,
         title       = 'Media ID',
         description = 'The specific ID of the movie within the selected source'
@@ -52,14 +52,19 @@ async def get_movie_details(
 async def get_show_details(
     request: Request,
     source:  SupportedProviders = Path(
-        ...,
+        default     = ...,
         title       = 'Source',
         description = 'The online source you are targeting'
     ),
-    id:      int = Path(
-        ...,
-        title        = 'Media ID',
-        description  = 'The specific ID of the show within the selected source'
+    id: int = Path(
+        default     = ...,
+        title       = 'Media ID',
+        description = 'The specific ID of the show within the selected source'
+    ),
+    with_episodes: bool = Query(
+        default     = False,
+        title       = 'Episodes',
+        description = 'Specify whenever to retrieve the episode list for the selected show'
     )
 ):
     """
@@ -70,7 +75,7 @@ async def get_show_details(
     if   source == SupportedProviders.THE_TV_DB:
         return await request.state.tvdb.get_show(id = id)
     elif source == SupportedProviders.THE_MOVIE_DB:
-        return await request.state.tmdb.get_show(id = id)
+        return await request.state.tmdb.get_show(id = id, with_episodes = with_episodes)
     else:
         detail = '[PlexAPI] - Unsupported source selected.'
         logging.error(detail)

@@ -175,8 +175,8 @@ class TMDBClient:
                          MovieStatus.CANCELED        if response["status"] == 'Canceled'        else None
         )
 
-    async def get_show(self, id: int, language: str = 'it-IT', short: bool = False) -> Show:
-        async def get_season(show_id: int, number: int, language: str = 'it-IT') -> Season:
+    async def get_show(self, id: int, language: str = 'it-IT', with_episodes: bool = False) -> Show:
+        async def get_episodes(show_id: int, number: int, language: str = 'it-IT', api_configs: dict = None) -> List[Episode]:
             api_endpoint = f'/tv/{show_id}/season/{number}'
             response = await async_ext_api_call(
                 http_client = self.http_client,
@@ -192,23 +192,13 @@ class TMDBClient:
             # ensure episodes are ordered by number
             response["episodes"] = sorted( response["episodes"], key = lambda ep: int(ep["episode_number"]) )
 
-            api_configs = await self.__get_configs()
-            season = Season(
-                guid       = f'tvdb://series/{show_id}/seasons/{response["id"]}',
-                source_id  = int(response["id"])  if "id" in response and response["id"]                   else None,
-                source_url = parse_obj_as(HttpUrl, f'{self.source_base_url}tv/{show_id}/season/{number}'),
-                title      = response["name"]     if "name" in response and response["name"]               else None,
-                overview   = response["overview"] if "overview" in response and response["overview"]       else None,
-                image      = parse_obj_as(HttpUrl, f'{api_configs["images"]["secure_base_url"]}{api_configs["images"]["poster_sizes"][-1]}{response["poster_path"]}') \
-                             if "poster_path" in response and response["poster_path"]                      else None,
-                airdate    = dateparser.parse(response["release_date"]).date() \
-                             if "release_date" in response and response["release_date"]                    else None,
-                number     = number,
-                episodes   = []
-            )
+            if not api_configs:
+                api_configs = await self.__get_configs()
+
+            episodes      = []
             episode_count = 1
             for episode in response["episodes"]:
-                season.episodes.append( Episode(
+                episodes.append( Episode(
                     guid       = f'tvdb://series/{show_id}/episodes/{episode["id"]}',
                     source_id  = episode["id"],
                     source_url = parse_obj_as(HttpUrl, f'{self.source_base_url}tv/{show_id}/season/{number}/{episode["episode_number"]}') \
@@ -224,7 +214,7 @@ class TMDBClient:
                 ) )
                 episode_count += 1
 
-            return season
+            return episodes
 
         api_endpoint = f'/tv/{id}'
         response = await async_ext_api_call(
@@ -241,11 +231,29 @@ class TMDBClient:
         api_configs = await self.__get_configs()
 
         seasons = []
-        if not short:
-            seasons = [ get_season(show_id = id, number = season["season_number"], language = language) for season in response["seasons"] ]
-            seasons = await asyncio.gather(*seasons)
-            # ensure seasons are ordered by number
-            seasons = sorted( seasons, key = lambda sn: int(sn.number) )
+        for season in response["seasons"]:
+            seasons.append( Season(
+                guid       = f'tvdb://series/{id}/seasons/{season["id"]}',
+                source_id  = int(season["id"])  if "id" in season and season["id"]             else None,
+                source_url = parse_obj_as(HttpUrl, f'{self.source_base_url}tv/{id}/season/{season["season_number"]}'),
+                title      = season["name"]     if "name" in season and season["name"]         else None,
+                overview   = season["overview"] if "overview" in season and season["overview"] else None,
+                image      = parse_obj_as(HttpUrl, f'{api_configs["images"]["secure_base_url"]}{api_configs["images"]["poster_sizes"][-1]}{season["poster_path"]}') \
+                            if "poster_path"    in season and season["poster_path"]            else None,
+                airdate    = dateparser.parse(season["air_date"]).date() \
+                            if "air_date"       in season and season["air_date"]               else None,
+                number     = int(season["season_number"]),
+                episodes   = []
+            ) )
+        # ensure seasons are ordered by number
+        seasons = sorted( seasons, key = lambda sn: int(sn.number) )
+
+        if with_episodes:
+            episodes = [ get_episodes(show_id = id, number = season.number, language = language, api_configs = api_configs) for season in seasons ]
+            episodes = await asyncio.gather(*episodes)
+            for index, season in enumerate(seasons):
+                season.episodes = episodes[index]
+
         return Show(
             guid       = f'tvdb://series/{response["id"]}',
             source_id  = int(response["id"]),
