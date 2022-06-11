@@ -17,6 +17,7 @@ from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 class TVDBClient:
     series_url_prefix = 'https://thetvdb.com/series/'
     movies_url_prefix = 'https://thetvdb.com/movies/'
+    images_base_url   = 'https://artworks.thetvdb.com'
 
     def __init__(self, http_client: httpx.AsyncClient):
         # Ref: https://thetvdb.github.io/v4-api (v4.6.2)
@@ -192,14 +193,19 @@ class TVDBClient:
                 episodes = []
                 for tmp_episode in tmp_season["episodes"]:
                     episodes.append( Episode( **tmp_episode | {
-                        "source_url": parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}{tmp_episode["source_url"]}'),
+                        "source_url": parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}{tmp_episode["source_url"]}') \
+                                      if "series" in response["data"] else None,
                         "title":      tmp_episode["title"]    if tmp_episode["title"]    else "",
                         "overview":   tmp_episode["overview"] if tmp_episode["overview"] else None,
-                        "image":      parse_obj_as(HttpUrl, tmp_episode["image"])     if tmp_episode["image"]   else None,
+                        "image":      parse_obj_as(
+                                          HttpUrl, tmp_episode["image"] if tmp_episode["image"].startswith(self.images_base_url) else self.images_base_url + tmp_episode["image"]
+                                      ) if tmp_episode["image"] else None,
                         "airdate":    dateparser.parse(tmp_episode["airdate"]).date() if tmp_episode["airdate"] else None
                     } ) )
                 seasons.append( Season( **tmp_season | {
-                    "source_url": parse_obj_as(HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}/seasons/{season_type.value.lower()}/{tmp_season["number"]}'),
+                    "source_url": parse_obj_as(
+                                      HttpUrl, f'{self.series_url_prefix}{response["data"]["series"]["slug"]}/seasons/{season_type.value.lower()}/{tmp_season["number"]}'
+                                  ) if "series" in response["data"] else None,
                     "episodes":   episodes
                 } ) )
 
@@ -255,14 +261,33 @@ class TVDBClient:
         seasons = sorted( seasons, key = lambda sn: int(sn.number) )
 
         if with_episodes:
-            ep_seasons = await get_seasons(show_id = id, season_type = season_type)
-            for season in seasons:
-                for ep_season in ep_seasons:
-                    if ep_season.source_url == season.source_url:
-                        season.episodes = ep_season.episodes
-                        if not season.airdate and ep_season.episodes[0].airdate:
-                            season.airdate = ep_season.episodes[0].airdate
-                        break
+            translations   = await asyncio.gather(*[
+                get_seasons(show_id = id, season_type = season_type),
+                get_seasons(show_id = id, season_type = season_type, language = 'ita'),
+                get_seasons(show_id = id, season_type = season_type, language = 'eng')
+            ])
+            ep_seasons_def = translations[0]
+            ep_seasons_ita = translations[1]
+            ep_seasons_eng = translations[2]
+            for s_index, season in enumerate(seasons):
+                season.episodes = next(
+                    (ep_season for ep_season in ep_seasons_def if ep_season.source_url == season.source_url),
+                    season
+                ).episodes
+                if not season.airdate and season.episodes[0].airdate:
+                    season.airdate = season.episodes[0].airdate
+                for e_index, episode in enumerate(season.episodes):
+                    if ep_seasons_ita[s_index].episodes[e_index].guid == episode.guid:
+                        if ep_seasons_ita[s_index].episodes[e_index].title:
+                            episode.title = ep_seasons_ita[s_index].episodes[e_index].title
+                        elif ep_seasons_eng[s_index].episodes[e_index].title and \
+                             ep_seasons_eng[s_index].episodes[e_index].guid == episode.guid:
+                            episode.title = ep_seasons_eng[s_index].episodes[e_index].title
+                        if ep_seasons_ita[s_index].episodes[e_index].overview:
+                            episode.overview = ep_seasons_ita[s_index].episodes[e_index].overview
+                        elif ep_seasons_eng[s_index].episodes[e_index].overview and \
+                             ep_seasons_eng[s_index].episodes[e_index].guid == episode.guid:
+                            episode.overview = ep_seasons_eng[s_index].episodes[e_index].overview
 
         return Show(
             guid       = f'tvdb://series/{response["data"]["id"]}',
