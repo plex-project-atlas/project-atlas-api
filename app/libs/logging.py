@@ -2,7 +2,7 @@ import os
 import sys
 import logging
 
-from loguru       import logger
+from loguru import logger
 
 
 LOG_LEVEL = logging.getLevelName( os.environ.get("LOG_LEVEL", "DEBUG") )

@@ -9,7 +9,7 @@ from fastapi          import HTTPException
 from typing           import Dict, List
 from pydantic         import HttpUrl
 from pydantic.tools   import parse_obj_as
-from math             import ceil
+from cashews          import noself_cache
 from libs.utils       import async_ext_api_call
 from libs.models      import Episode, MediaType, Media, Movie, SearchResult, Show, Season, MovieStatus, ShowStatus
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
@@ -28,51 +28,22 @@ class TMDBClient:
         }
         self.http_client = http_client
 
+    @noself_cache(ttl = "1d")
     async def __get_configs(self) -> Dict:
-        # Static until cached (ref: https://developers.themoviedb.org/3/configuration/get-api-configuration)
-        return {
-            "images": {
-                "base_url": "http://image.tmdb.org/t/p/",
-                "secure_base_url": "https://image.tmdb.org/t/p/",
-                "backdrop_sizes": [
-                    "w300",
-                    "w780",
-                    "w1280",
-                    "original"
-                ],
-                "logo_sizes": [
-                    "w45",
-                    "w92",
-                    "w154",
-                    "w185",
-                    "w300",
-                    "w500",
-                    "original"
-                ],
-                "poster_sizes": [
-                    "w92",
-                    "w154",
-                    "w185",
-                    "w342",
-                    "w500",
-                    "w780",
-                    "original"
-                ],
-                "profile_sizes": [
-                    "w45",
-                    "w185",
-                    "h632",
-                    "original"
-                ],
-                "still_sizes": [
-                    "w92",
-                    "w185",
-                    "w300",
-                    "original"
-                ]
+        api_endpoint = f'/configuration'
+        response = await async_ext_api_call(
+            http_client = self.http_client,
+            url         = parse_obj_as(HttpUrl, self.api_url + api_endpoint),
+            method      = httpx.AsyncClient.get,
+            caller      = "TMDB",
+            headers     = self.api_headers,
+            params      = {
+                'api_key': self.api_key
             }
-        }
+        )
+        return {"images": response["images"]}
 
+    @noself_cache(ttl = "1d")
     async def do_search(self, query: str, type: MediaType = None) -> SearchResult:
         async def do_search_by_type(query: str, type: MediaType, language: str = 'it-IT', page: int = 1) -> List:
             if not type in [MediaType.MOVIE, MediaType.SERIES]:
@@ -142,6 +113,7 @@ class TMDBClient:
             'series': await do_search_by_type(query = query, type = type) if type == MediaType.SERIES else []
         }
 
+    @noself_cache(ttl = "1d")
     async def get_movie(self, id: int, language: str = 'it-IT') -> Movie:
         api_endpoint = f'/movie/{id}'
         response = await async_ext_api_call(
@@ -175,6 +147,7 @@ class TMDBClient:
                          MovieStatus.CANCELED        if response["status"] == 'Canceled'        else None
         )
 
+    @noself_cache(ttl = "1d")
     async def get_show(self, id: int, language: str = 'it-IT', with_episodes: bool = False) -> Show:
         async def get_episodes(show_id: int, number: int, language: str, api_configs: dict = None) -> List[Episode]:
             api_endpoint = f'/tv/{show_id}/season/{number}'

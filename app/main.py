@@ -7,13 +7,13 @@ import warnings
 
 from uvicorn            import Config, Server
 from fastapi            import FastAPI, HTTPException, Depends
+from cashews            import Cache
 from libs.logging       import LOG_LEVEL, setup_logging
 from libs.tvdb          import TVDBClient
 from libs.tmdb          import TMDBClient
 from routers            import search, details
 from starlette.requests import Request
 from starlette.status   import HTTP_200_OK, \
-                               HTTP_500_INTERNAL_SERVER_ERROR, \
                                HTTP_511_NETWORK_AUTHENTICATION_REQUIRED
 
 
@@ -43,6 +43,18 @@ app = FastAPI(
 
 @app.on_event('startup')
 async def instantiate_clients():
+    logging.info('[PlexAPI] - Initializing client cache...')
+    clients['cache'] = Cache()
+    # clients['cache'].setup(
+    #     "redis://redis-10577.c55.eu-central-1-1.ec2.cloud.redislabs.com:10577/",
+    #     db     = 1,
+    #     wait_for_connection_timeout = 0.5,
+    #     safe   = False,
+    #     enable = True,
+    #     username = "project-atlas-editor",
+    #     password = "F&_!dT7V*Ws!YN*7q67vSHrDN5Zugy"
+    # )
+    clients['cache'].setup("mem://?check_interval=10&size=30720")
     logging.info('[FastAPI] - Initializing HTTPX client...')
     clients['httpx'] = httpx.AsyncClient(
         limits    = httpx.Limits(max_connections = 50),
@@ -52,13 +64,14 @@ async def instantiate_clients():
             retries = 1 # TODO: I nostri retry in async_ext_api_call() non tengono conto di questo
         )
     )
-    logging.info('[FastAPI] - Initializing TVDB client...')
-    clients['tvdb'] = TVDBClient(clients['httpx'])
-    logging.info('[FastAPI] - Initializing TMDB client...')
-    clients['tmdb'] = TMDBClient(clients['httpx'])
+    logging.info('[PlexAPI] - Initializing TVDB client...')
+    clients['tvdb']  = TVDBClient(clients['httpx'])
+    logging.info('[PlexAPI] - Initializing TMDB client...')
+    clients['tmdb']  = TMDBClient(clients['httpx'])
 
 @app.middleware('http')
 async def add_global_vars(request: Request, call_next):
+    request.state.cache = clients['cache']
     request.state.httpx = clients['httpx']
     request.state.tvdb  = clients['tvdb']
     request.state.tmdb  = clients['tmdb']

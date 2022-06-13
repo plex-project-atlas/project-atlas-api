@@ -9,10 +9,12 @@ from typing           import List
 from pydantic         import HttpUrl
 from pydantic.tools   import parse_obj_as
 from math             import ceil
+from cashews          import noself_cache
 from libs.utils       import async_ext_api_call
 from libs.models      import MediaType, Media, Movie, Show, Season, Episode, \
                              SearchResult, MovieStatus, ShowStatus, SeasonType
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
+
 
 class TVDBClient:
     series_url_prefix = 'https://thetvdb.com/series/'
@@ -30,7 +32,7 @@ class TVDBClient:
         }
         self.http_client = http_client
 
-    #@cached(cache=TTLCache(maxsize=1, ttl=604800)) # Cache token for 1 week
+    @noself_cache(ttl = "7d")
     async def get_auth_token(self):
         api_endpoint = '/login'
         payload = {
@@ -50,6 +52,7 @@ class TVDBClient:
     async def get_auth_headers(self):
         return self.api_headers | { 'Authorization': f'Bearer { await self.get_auth_token() }' }
 
+    @noself_cache(ttl = "1d")
     async def do_search(self, query: str, type: MediaType = None) -> SearchResult:
         api_endpoint = '/search'
         response = await async_ext_api_call(
@@ -113,6 +116,7 @@ class TVDBClient:
 
         return search_result
 
+    @noself_cache(ttl = "1d")
     async def get_movie(self, id: int) -> Movie:
         api_endpoint = f'/movies/{id}/extended'
         response = await async_ext_api_call(
@@ -154,6 +158,7 @@ class TVDBClient:
                          MovieStatus.RELEASED        if response["data"]["status"]["id"] == 5 else None
         )
 
+    @noself_cache(ttl = "1d")
     async def get_show(self, id: int, season_type: SeasonType = SeasonType.OFFICIAL, with_episodes: bool = False) -> Show:
         async def get_seasons(show_id: int, season_type: SeasonType, language: str = None, page: int = 0) -> List[Season]:
             jq_season_parser = '''[ .data.episodes | group_by(.seasonNumber)[] | {
