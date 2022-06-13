@@ -26,9 +26,9 @@ async def async_ext_api_call(
         try:
             if len(kwargs.get('params', [ ])) > 0:
                 url_encoded=f'{url}?{"&".join(["=".join([key, urllib.parse.quote(str(value).encode("utf-8"))]) for key, value in kwargs["params"].items()])}'
-                logging.error(f'[{caller}] - An external API endpoint is beeing called: {url_encoded}')
+                logging.debug(f'[{caller}] - An external API endpoint is beeing called: {url_encoded}')
             else:
-                logging.error(f'[{caller}] - An external API endpoint is beeing called: {url}')
+                logging.debug(f'[{caller}] - An external API endpoint is beeing called: {url}')
 
             api_call = await method(http_client, url=url, **kwargs)
             api_call.raise_for_status()

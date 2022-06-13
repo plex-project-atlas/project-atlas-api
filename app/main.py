@@ -5,7 +5,9 @@ import uvicorn
 import logging
 import warnings
 
+from uvicorn            import Config, Server
 from fastapi            import FastAPI, HTTPException, Depends
+from libs.logging       import LOG_LEVEL, setup_logging
 from libs.tvdb          import TVDBClient
 from libs.tmdb          import TMDBClient
 from routers            import search, details
@@ -95,8 +97,16 @@ if __name__ == '__main__':
         "ignore",
         message = "The localize method is no longer necessary, as this time zone supports the fold attribute",
     )
-    uvicorn.run(app,
-        host   = os.environ.get('UVICORN_HOST',      '0.0.0.0'),
-        port   = int( os.environ.get('UVICORN_PORT', '8080') ),
-        #reload = os.environ.get('UVICORN_RELOAD', 'True')
-    )
+
+    server = Server( Config(
+        "main:app",
+        host      = os.environ.get('UVICORN_HOST', '0.0.0.0'),
+        port      = int( os.environ.get('UVICORN_PORT', '8080') ),
+        log_level = LOG_LEVEL,
+    ) )
+
+    # setup logging last, to make sure no library overwrites it
+    # (they shouldn't, but it happens)
+    setup_logging()
+
+    server.run()
